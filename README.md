@@ -46,6 +46,12 @@ ruststream-cli connect 192.168.1.20
 ruststream-cli bench-loopback --size 1920x1080 --fps 60 --seconds 10
 ```
 
+Pour essayer hôte et client sur un même PC, lancer une seconde instance avec son propre dossier de configuration (identité, réglages et appareils autorisés séparés) et un autre port dans ses Paramètres :
+
+```powershell
+$env:RUSTSTREAM_CONFIG_DIR = "$env:TEMPuststream-b"; ruststream.exe
+```
+
 ## Compatibilité
 
 Windows 10/11 x64. Testé sur un seul PC portable (Intel Iris Xe) en boucle locale ; **pas encore testé entre deux PC physiques**.

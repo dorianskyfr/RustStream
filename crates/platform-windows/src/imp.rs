@@ -178,3 +178,34 @@ impl Drop for HighResolutionTimer {
         }
     }
 }
+
+/// Matches the native title bar to the app theme: dark mode flag (Windows 10
+/// 20H1+ and 11) and, on Windows 11, the caption colour (`0x00BBGGRR`, `None`
+/// restores the system default). Purely cosmetic: failures are ignored.
+pub fn style_title_bar(hwnd: isize, dark: bool, caption_bgr: Option<u32>) {
+    use std::ffi::c_void;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Graphics::Dwm::{
+        DWMWA_CAPTION_COLOR, DWMWA_COLOR_DEFAULT, DWMWA_USE_IMMERSIVE_DARK_MODE,
+        DwmSetWindowAttribute,
+    };
+    let hwnd = HWND(hwnd as *mut c_void);
+    let dark_flag = i32::from(dark);
+    let caption = caption_bgr.unwrap_or(DWMWA_COLOR_DEFAULT);
+    // SAFETY: both attributes take a 4-byte value that outlives the call; an
+    // invalid window handle only makes the call fail.
+    unsafe {
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            std::ptr::from_ref(&dark_flag).cast(),
+            4,
+        );
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_CAPTION_COLOR,
+            std::ptr::from_ref(&caption).cast(),
+            4,
+        );
+    }
+}

@@ -66,8 +66,14 @@ pub struct Paths {
 }
 
 impl Paths {
-    /// Per-user configuration directory (`%APPDATA%\RustStream\config` on Windows).
+    /// Per-user configuration directory (`%APPDATA%\RustStream\config` on
+    /// Windows), or `RUSTSTREAM_CONFIG_DIR` when set — e.g. to run a second,
+    /// independent instance (own identity, settings and trust list) on the
+    /// same computer for testing.
     pub fn user_default() -> Result<Self> {
+        if let Some(dir) = std::env::var_os("RUSTSTREAM_CONFIG_DIR").filter(|d| !d.is_empty()) {
+            return Ok(Self::in_dir(dir));
+        }
         let dirs = directories::ProjectDirs::from("", "", "RustStream")
             .ok_or_else(|| CoreError::Other("no home directory".into()))?;
         Ok(Self {

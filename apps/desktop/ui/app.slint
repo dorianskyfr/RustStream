@@ -2,7 +2,7 @@ import { LineEdit, ScrollView, Slider, Spinner, AboutSlint, Palette } from "std-
 import { Theme, Icons } from "theme.slint";
 import {
     Icon, Button, Card, NavItem, StatusDot, Pill, PageHeader, SectionTitle,
-    SettingRow, Divider, Toggle, OptionCard, Dialog
+    SettingRow, Divider, Toggle, OptionCard, Dialog, Backdrop, ScreenArt, StatCard
 } from "widgets.slint";
 
 export { Theme }
@@ -29,6 +29,455 @@ export struct StatLine {
     value: string,
 }
 
+// Stylised monitor with an abstract screen (original artwork, not a capture).
+component MonitorArt {
+    in property <int> variant;
+    private property <length> stand: 34px;
+    private property <length> w: min(root.width, (root.height - self.stand) / 0.62);
+    private property <length> h: self.w * 0.62;
+    private property <length> ox: (root.width - self.w) / 2;
+    private property <length> oy: (root.height - self.h - self.stand) / 2;
+    accessible-role: none;
+
+    // Glow under the stand
+    Rectangle {
+        x: root.ox + root.w * 0.12;
+        y: root.oy + root.h + 6px;
+        width: root.w * 0.76;
+        height: 40px;
+        background: @radial-gradient(circle, #3b82f699 0%, #a855f700 70%);
+    }
+    // Neck
+    Rectangle {
+        x: root.ox + root.w / 2 - root.w * 0.055;
+        y: root.oy + root.h - 2px;
+        width: root.w * 0.11;
+        height: root.stand - 8px;
+        background: @linear-gradient(180deg, #1b2646 0%, #0c1328 100%);
+    }
+    // Base with a cyan → violet light strip
+    Rectangle {
+        x: root.ox + root.w / 2 - root.w * 0.2;
+        y: root.oy + root.h + root.stand - 12px;
+        width: root.w * 0.4;
+        height: 7px;
+        border-radius: 3.5px;
+        background: @linear-gradient(90deg, #22d3ee 0%, #3b82f6 50%, #a855f7 100%);
+        drop-shadow-blur: 16px;
+        drop-shadow-color: #3b82f6aa;
+    }
+    // Bezel
+    Rectangle {
+        x: root.ox;
+        y: root.oy;
+        width: root.w;
+        height: root.h;
+        border-radius: 10px;
+        background: #060a17;
+        border-width: 1.5px;
+        border-color: #2b3d6b;
+        drop-shadow-blur: 34px;
+        drop-shadow-color: #3b82f644;
+        ScreenArt {
+            x: 7px;
+            y: 7px;
+            width: parent.width - 14px;
+            height: parent.height - 14px;
+            border-radius: 5px;
+            variant: root.variant;
+        }
+    }
+}
+
+// One row of a popup menu.
+component MenuRow {
+    in property <string> text;
+    in property <string> icon;
+    in property <bool> danger;
+    callback clicked;
+    height: 38px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+    Rectangle {
+        border-radius: 8px;
+        background: ta.has-hover ? Theme.surface-hover : transparent;
+        HorizontalLayout {
+            padding-left: 10px;
+            padding-right: 12px;
+            spacing: 10px;
+            Icon {
+                data: root.icon;
+                color: root.danger ? Theme.danger : Theme.text-muted;
+                size: 16px;
+                y: (parent.height - self.height) / 2;
+            }
+            Text {
+                text: root.text;
+                color: root.danger ? Theme.danger : Theme.text;
+                font-size: Theme.font-m;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component Menu inherits Rectangle {
+    background: Theme.surface-solid;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: Theme.border-strong;
+    drop-shadow-blur: 24px;
+    drop-shadow-color: #00000088;
+    VerticalLayout {
+        padding: 6px;
+        @children
+    }
+}
+
+component ComputerTile {
+    in property <ComputerItem> item;
+    in property <int> variant;
+    in property <bool> selected;
+    callback select();
+    callback connect();
+    callback remove();
+
+    width: 236px;
+    height: 200px;
+
+    Rectangle {
+        border-radius: 18px;
+        background: root.selected ? @linear-gradient(160deg, #22d3ee22 0%, #3b82f61f 55%, #a855f71f 100%)
+            : tile-ta.has-hover ? Theme.surface-hover : Theme.surface;
+        border-width: root.selected ? 1.5px : 1px;
+        border-color: root.selected ? Theme.cyan.with-alpha(0.75) : Theme.border;
+        drop-shadow-blur: root.selected ? 24px : 0px;
+        drop-shadow-color: #22d3ee44;
+        animate border-color, drop-shadow-blur { duration: Theme.fast; }
+
+        tile-ta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.select(); }
+        }
+        VerticalLayout {
+            padding: 12px;
+            spacing: 12px;
+            Rectangle {
+                vertical-stretch: 1;
+                border-radius: 10px;
+                clip: true;
+                accessible-role: text;
+                accessible-label: root.item.name + ", " + root.item.status;
+                ScreenArt {
+                    width: parent.width;
+                    height: parent.height;
+                    variant: root.variant;
+                }
+                Icon {
+                    x: 10px;
+                    y: 10px;
+                    data: Icons.monitor;
+                    color: #ffffffe6;
+                    size: 20px;
+                }
+                StatusDot {
+                    x: parent.width - self.width - 11px;
+                    y: 12px;
+                    tint: root.item.online ? Theme.success : #8a94b0;
+                }
+                Rectangle {
+                    y: parent.height - self.height;
+                    height: 32px;
+                    background: @linear-gradient(180deg, #00000000 0%, #000000b0 100%);
+                    Text {
+                        x: 10px;
+                        width: parent.width - 20px;
+                        text: root.item.name;
+                        color: #ffffff;
+                        font-size: Theme.font-s;
+                        font-weight: 600;
+                        overflow: elide;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+            HorizontalLayout {
+                spacing: 10px;
+                height: 38px;
+                Button {
+                    primary: root.selected;
+                    icon: Icons.play;
+                    icon-filled: true;
+                    icon-size: 18px;
+                    label: "Se connecter à " + root.item.name;
+                    horizontal-stretch: 1;
+                    clicked => { root.select(); root.connect(); }
+                }
+                Button {
+                    icon: Icons.dots;
+                    icon-size: 20px;
+                    label: "Options de " + root.item.name;
+                    width: 54px;
+                    clicked => { menu.show(); }
+                }
+            }
+        }
+        menu := PopupWindow {
+            x: parent.width - 190px;
+            y: parent.height - 6px;
+            width: 200px;
+            Menu {
+                MenuRow {
+                    text: "Se connecter";
+                    icon: Icons.play;
+                    clicked => { menu.close(); root.select(); root.connect(); }
+                }
+                if root.item.saved: MenuRow {
+                    text: "Retirer de la liste";
+                    icon: Icons.trash;
+                    danger: true;
+                    clicked => { menu.close(); root.remove(); }
+                }
+            }
+        }
+    }
+}
+
+component AddTile {
+    callback clicked;
+    width: 180px;
+    height: 200px;
+    accessible-role: button;
+    accessible-label: "Ajouter un ordinateur";
+    accessible-action-default => { root.clicked(); }
+    forward-focus: fs;
+    Rectangle {
+        border-radius: 18px;
+        background: ta.has-hover ? Theme.surface-hover : Theme.surface;
+        border-width: fs.has-focus ? 2px : 1px;
+        border-color: fs.has-focus ? Theme.focus : ta.has-hover ? Theme.violet.with-alpha(0.7) : Theme.border;
+        animate border-color { duration: Theme.fast; }
+        Icon {
+            data: Icons.plus;
+            color: Theme.text;
+            size: 40px;
+            weight: 1.6px;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { fs.focus(); root.clicked(); }
+    }
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+// Computer picker: shows the selected computer, opens a list on click.
+component ComputerPicker {
+    in property <[ComputerItem]> computers;
+    in-out property <int> selected;
+    private property <bool> has: root.computers.length > 0;
+
+    height: 56px;
+    accessible-role: combobox;
+    accessible-label: "Ordinateur";
+    accessible-value: root.has ? root.computers[root.selected].name : "Aucun ordinateur";
+    forward-focus: fs;
+
+    Rectangle {
+        border-radius: 12px;
+        background: ta.has-hover && root.has ? Theme.surface-hover : #0a1124f0;
+        border-width: fs.has-focus ? 2px : 1px;
+        border-color: fs.has-focus ? Theme.focus : Theme.border-strong;
+        HorizontalLayout {
+            padding-left: 16px;
+            padding-right: 14px;
+            spacing: 14px;
+            Icon {
+                data: Icons.monitor;
+                color: Theme.text-muted;
+                size: 22px;
+                y: (parent.height - self.height) / 2;
+            }
+            VerticalLayout {
+                alignment: center;
+                spacing: 1px;
+                horizontal-stretch: 1;
+                Text {
+                    text: root.has ? root.computers[root.selected].name : "Aucun ordinateur";
+                    color: root.has ? Theme.text : Theme.text-muted;
+                    font-size: Theme.font-l;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+                if root.has: Text {
+                    text: root.computers[root.selected].status + " · " + root.computers[root.selected].address;
+                    color: Theme.text-faint;
+                    font-size: Theme.font-xs;
+                    overflow: elide;
+                }
+            }
+            Icon {
+                data: Icons.chevron-down;
+                color: root.has ? Theme.text : Theme.text-faint;
+                size: 20px;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: root.has ? pointer : default;
+        clicked => {
+            fs.focus();
+            if (root.has) { popup.show(); }
+        }
+    }
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.UpArrow && root.selected > 0) {
+                root.selected -= 1;
+                return accept;
+            }
+            if (event.text == Key.DownArrow && root.selected < root.computers.length - 1) {
+                root.selected += 1;
+                return accept;
+            }
+            if ((event.text == Key.Return || event.text == " ") && root.has) {
+                popup.show();
+                return accept;
+            }
+            reject
+        }
+    }
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 6px;
+        width: root.width;
+        Menu {
+            for c[i] in root.computers: Rectangle {
+                height: 46px;
+                border-radius: 8px;
+                background: row-ta.has-hover ? Theme.surface-hover : i == root.selected ? Theme.accent-soft : transparent;
+                accessible-role: button;
+                accessible-label: c.name;
+                accessible-action-default => { root.selected = i; }
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 10px;
+                    StatusDot {
+                        tint: c.online ? Theme.success : #8a94b0;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Text {
+                        text: c.name;
+                        color: Theme.text;
+                        font-size: Theme.font-m;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                    }
+                    Text {
+                        text: c.status;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-xs;
+                        vertical-alignment: center;
+                    }
+                }
+                row-ta := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.selected = i; popup.close(); }
+                }
+            }
+        }
+    }
+}
+
+component ShareCard inherits Card {
+    in property <bool> hosting;
+    in property <string> local-address;
+    in property <string> host-session-peer;
+    callback set-hosting(bool);
+    callback stop-host-session();
+    min-height: 92px;
+    HorizontalLayout {
+        padding: 16px;
+        spacing: 14px;
+        Rectangle {
+            width: 42px;
+            height: 42px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 12px;
+            background: Theme.accent-soft;
+            Icon {
+                data: Icons.server;
+                color: Theme.accent-gradient;
+                size: 22px;
+                weight: 2px;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 6px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.host-session-peer != "" ? "Session en cours avec" : "Partager cet ordinateur";
+                color: root.host-session-peer != "" ? Theme.warning : Theme.text-muted;
+                font-size: Theme.font-s;
+                overflow: elide;
+            }
+            Text {
+                text: root.host-session-peer != "" ? root.host-session-peer
+                    : root.hosting ? root.local-address : "Désactivé";
+                color: Theme.text;
+                font-size: Theme.font-m;
+                font-weight: 700;
+                overflow: elide;
+            }
+            // Status strip: full gradient when sharing (not a progress bar).
+            Rectangle {
+                height: 4px;
+                border-radius: 2px;
+                background: Theme.surface-2;
+                Rectangle {
+                    x: 0;
+                    width: root.hosting ? parent.width : 0px;
+                    border-radius: 2px;
+                    background: @linear-gradient(90deg, #22d3ee 0%, #3b82f6 60%, #a855f7 100%);
+                    animate width { duration: Theme.normal; easing: ease-out; }
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            if root.host-session-peer != "": Button {
+                text: "Terminer";
+                danger: true;
+                clicked => { root.stop-host-session(); }
+            }
+            if root.host-session-peer == "": Toggle {
+                label: "Partager cet ordinateur";
+                checked: root.hosting;
+                toggled(v) => { root.set-hosting(v); }
+            }
+        }
+    }
+}
+
 component HomePage {
     in property <string> device-name;
     in property <string> fingerprint;
@@ -36,214 +485,167 @@ component HomePage {
     in property <bool> hosting;
     in property <string> host-session-peer;
     in property <[ComputerItem]> computers;
+    in-out property <int> selected;
+    in property <string> net-value;
+    in property <string> net-spark;
+    in property <string> latency-value;
+    in property <string> latency-spark;
     callback set-hosting(bool);
     callback stop-host-session();
     callback connect(string);
     callback remove-computer(string);
     callback open-add();
 
-    sv := ScrollView {
-        width: root.width;
-        height: root.height;
-        VerticalLayout {
-            width: sv.visible-width;
-            padding: 28px;
-            padding-top: 24px;
-            spacing: 18px;
+    private property <bool> has: root.computers.length > 0;
+    private property <int> sel: max(0, min(root.selected, root.computers.length - 1));
+
+    VerticalLayout {
+        padding-left: 36px;
+        padding-right: 36px;
+        padding-top: 26px;
+        padding-bottom: 26px;
+        spacing: 28px;
+        alignment: start;
+
+        // Wordmark
+        HorizontalLayout {
+            spacing: 14px;
             alignment: start;
-
-            PageHeader {
-                title: "Ordinateurs";
-                subtitle: "Connectez-vous à un ordinateur ou partagez celui-ci.";
+            height: 52px;
+            accessible-role: text;
+            accessible-label: "RustStream";
+            Path {
+                width: 40px;
+                height: 40px;
+                y: (parent.height - self.height) / 2;
+                viewbox-width: 24;
+                viewbox-height: 24;
+                commands: "M6.5 3.6 C6.5 2.5 7.7 1.9 8.6 2.5 L20.6 10.5 C21.4 11.1 21.4 12.9 20.6 13.5 L8.6 21.5 C7.7 22.1 6.5 21.5 6.5 20.4 Z M10 8.2 V15.8 L15.6 12 Z";
+                fill: @linear-gradient(135deg, #22d3ee 0%, #3b82f6 50%, #a855f7 100%);
+                stroke: transparent;
             }
-
-            // This computer.
-            Card {
-                HorizontalLayout {
-                    padding: 16px;
-                    spacing: 14px;
-                    Rectangle {
-                        width: 40px;
-                        height: 40px;
-                        border-radius: Theme.radius-s;
-                        background: Theme.accent-soft;
-                        Icon { data: Icons.monitor; color: Theme.accent; size: 20px; }
-                    }
-                    VerticalLayout {
-                        alignment: center;
-                        spacing: 3px;
-                        horizontal-stretch: 1;
-                        HorizontalLayout {
-                            spacing: 10px;
-                            alignment: start;
-                            Text {
-                                text: root.device-name;
-                                color: Theme.text;
-                                font-size: Theme.font-l;
-                                font-weight: 600;
-                                vertical-alignment: center;
-                                overflow: elide;
-                            }
-                            Pill {
-                                text: "Cet ordinateur";
-                                tint: Theme.text-muted;
-                                y: (parent.height - self.height) / 2;
-                            }
-                        }
-                        Text {
-                            text: root.hosting
-                                ? "Partage activé · " + root.local-address + " · empreinte " + root.fingerprint
-                                : "Partage désactivé · empreinte " + root.fingerprint;
-                            color: Theme.text-muted;
-                            font-size: Theme.font-s;
-                            overflow: elide;
-                        }
-                    }
-                    VerticalLayout {
-                        alignment: center;
-                        horizontal-stretch: 0;
-                        HorizontalLayout {
-                            spacing: 10px;
-                            Text {
-                                text: "Partager";
-                                color: Theme.text-muted;
-                                font-size: Theme.font-s;
-                                vertical-alignment: center;
-                            }
-                            Toggle {
-                                label: "Partager cet ordinateur";
-                                checked: root.hosting;
-                                toggled(v) => { root.set-hosting(v); }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Visible indicator whenever someone controls this computer.
-            if root.host-session-peer != "": Rectangle {
-                background: Theme.warning.with-alpha(0.12);
-                border-radius: Theme.radius-m;
-                border-width: 1px;
-                border-color: Theme.warning.with-alpha(0.5);
-                accessible-role: text;
-                accessible-label: "Session active : " + root.host-session-peer + " contrôle cet ordinateur";
-                HorizontalLayout {
-                    padding: 12px;
-                    padding-left: 16px;
-                    spacing: 12px;
-                    StatusDot { tint: Theme.warning; y: (parent.height - self.height) / 2; }
-                    Text {
-                        text: "Session active : « " + root.host-session-peer + " » contrôle cet ordinateur.";
-                        color: Theme.text;
-                        font-size: Theme.font-m;
-                        vertical-alignment: center;
-                        horizontal-stretch: 1;
-                        wrap: word-wrap;
-                    }
-                    Button {
-                        text: "Terminer";
-                        danger: true;
-                        clicked => { root.stop-host-session(); }
-                    }
-                }
-            }
-
             HorizontalLayout {
-                spacing: 12px;
-                SectionTitle {
-                    text: "ORDINATEURS";
+                spacing: 0px;
+                Text {
+                    text: "rust";
+                    color: Theme.text;
+                    font-size: 34px;
+                    font-weight: 700;
                     vertical-alignment: center;
-                    horizontal-stretch: 1;
                 }
-                Button {
-                    text: "Ajouter un ordinateur";
-                    icon: Icons.plus;
-                    clicked => { root.open-add(); }
-                }
-            }
-
-            if root.computers.length == 0: Card {
-                VerticalLayout {
-                    padding: 28px;
-                    spacing: 8px;
-                    alignment: center;
-                    Icon {
-                        data: Icons.link;
-                        color: Theme.text-faint;
-                        size: 26px;
-                        x: (parent.width - self.width) / 2;
-                    }
-                    Text {
-                        text: "Aucun ordinateur pour l'instant";
-                        color: Theme.text;
-                        font-size: Theme.font-m;
-                        font-weight: 600;
-                        horizontal-alignment: center;
-                    }
-                    Text {
-                        text: "Activez « Partager » sur l'autre PC : il apparaîtra ici s'il est sur le même réseau. Sinon, ajoutez-le avec son adresse.";
-                        color: Theme.text-muted;
-                        font-size: Theme.font-s;
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
-                    }
+                Text {
+                    text: "stream";
+                    color: #38bdf8;
+                    font-size: 34px;
+                    font-weight: 700;
+                    vertical-alignment: center;
                 }
             }
+        }
 
-            for c in root.computers: Card {
+        HorizontalLayout {
+            spacing: 22px;
+            height: max(280px, min(400px, root.height - 410px));
+
+            // Hero
+            Card {
+                horizontal-stretch: 1;
+                border-radius: 24px;
+                border-width: 1.5px;
+                border-color: Theme.blue.with-alpha(0.5);
+                drop-shadow-blur: 30px;
+                drop-shadow-color: #3b82f622;
                 HorizontalLayout {
-                    padding: 14px;
-                    padding-left: 16px;
-                    spacing: 14px;
-                    Icon {
-                        data: Icons.monitor;
-                        color: c.online ? Theme.text : Theme.text-faint;
-                        size: 22px;
-                        y: (parent.height - self.height) / 2;
-                    }
-                    VerticalLayout {
-                        alignment: center;
-                        spacing: 3px;
+                    padding: 24px;
+                    padding-left: 30px;
+                    padding-right: 34px;
+                    spacing: 34px;
+                    MonitorArt {
                         horizontal-stretch: 1;
-                        Text {
-                            text: c.name;
-                            color: Theme.text;
-                            font-size: Theme.font-m;
-                            font-weight: 600;
-                            overflow: elide;
-                        }
-                        Text {
-                            text: c.address + (c.fingerprint != "" ? " · " + c.fingerprint : "");
-                            color: Theme.text-muted;
-                            font-size: Theme.font-s;
-                            overflow: elide;
-                        }
+                        min-width: 200px;
+                        variant: root.has ? Math.mod(root.sel, 4) : 0;
                     }
                     VerticalLayout {
+                        width: 320px;
                         alignment: center;
-                        Pill {
-                            text: c.status;
-                            tint: c.online ? Theme.success : Theme.text-faint;
+                        spacing: 18px;
+                        ComputerPicker {
+                            computers: root.computers;
+                            selected <=> root.selected;
                         }
-                    }
-                    VerticalLayout {
-                        alignment: center;
-                        Button {
-                            text: "Se connecter";
+                        if root.has: Button {
                             primary: true;
-                            clicked => { root.connect(c.id); }
+                            icon: Icons.play;
+                            icon-filled: true;
+                            icon-size: 28px;
+                            label: "Se connecter à " + root.computers[root.sel].name;
+                            height: 64px;
+                            clicked => { root.connect(root.computers[root.sel].id); }
+                        }
+                        if !root.has: Button {
+                            primary: true;
+                            icon: Icons.plus;
+                            text: "Ajouter un ordinateur";
+                            height: 64px;
+                            clicked => { root.open-add(); }
+                        }
+                        Text {
+                            text: root.has ? "Se connecter à " + root.computers[root.sel].name
+                                : "Activez « Partager » sur l'autre ordinateur : il apparaîtra ici.";
+                            color: Theme.text-faint;
+                            font-size: Theme.font-s;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
                         }
                     }
-                    if c.saved: VerticalLayout {
-                        alignment: center;
-                        Button {
-                            icon: Icons.trash;
-                            label: "Retirer " + c.name;
-                            quiet: true;
-                            clicked => { root.remove-computer(c.id); }
-                        }
-                    }
+                }
+            }
+
+            // Live status
+            VerticalLayout {
+                width: 310px;
+                spacing: 16px;
+                StatCard {
+                    icon: Icons.signal;
+                    title: "Débit vidéo";
+                    value: root.net-value;
+                    spark: root.net-spark;
+                }
+                StatCard {
+                    icon: Icons.gauge;
+                    title: "Latence réseau";
+                    value: root.latency-value;
+                    spark: root.latency-spark;
+                }
+                ShareCard {
+                    hosting: root.hosting;
+                    local-address: root.local-address;
+                    host-session-peer: root.host-session-peer;
+                    set-hosting(v) => { root.set-hosting(v); }
+                    stop-host-session => { root.stop-host-session(); }
+                }
+            }
+        }
+
+        // Computers
+        Flickable {
+            height: 214px;
+            content-width: tiles.preferred-width;
+            tiles := HorizontalLayout {
+                height: 214px;
+                padding: 7px;
+                spacing: 20px;
+                alignment: start;
+                for c[i] in root.computers: ComputerTile {
+                    item: c;
+                    variant: Math.mod(i, 4);
+                    selected: i == root.sel;
+                    select => { root.selected = i; }
+                    connect => { root.connect(c.id); }
+                    remove => { root.remove-computer(c.id); }
+                }
+                AddTile {
+                    clicked => { root.open-add(); }
                 }
             }
         }
@@ -810,10 +1212,10 @@ component SessionView inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: root.in-session ? root.session-title + " — RustStream" : "RustStream";
-    preferred-width: 1080px;
-    preferred-height: 700px;
-    min-width: 760px;
-    min-height: 520px;
+    preferred-width: 1280px;
+    preferred-height: 760px;
+    min-width: 980px;
+    min-height: 640px;
     background: root.in-session ? #000000 : Theme.bg;
     default-font-family: "Segoe UI";
     icon: @image-url("../assets/icon.png");
@@ -821,6 +1223,12 @@ export component AppWindow inherits Window {
     in-out property <bool> dark <=> Theme.dark;
     in-out property <bool> animations <=> Theme.animations;
     in-out property <int> page: 0;
+    in-out property <int> selected-computer: 0;
+    // Home status cards (sparklines: SVG path on a 100×30 viewbox).
+    in property <string> net-value: "—";
+    in property <string> net-spark;
+    in property <string> latency-value: "—";
+    in property <string> latency-spark;
 
     // Local computer
     in property <string> device-name;
@@ -896,148 +1304,134 @@ export component AppWindow inherits Window {
     }
     init => { root.apply-theme(); }
 
-    if !root.in-session: HorizontalLayout {
-        // Sidebar
-        Rectangle {
-            width: 216px;
-            background: Theme.sidebar;
-            VerticalLayout {
-                padding: 14px;
-                padding-top: 18px;
-                spacing: 4px;
-                HorizontalLayout {
-                    padding-left: 8px;
-                    padding-bottom: 18px;
-                    spacing: 10px;
-                    Rectangle {
-                        width: 26px;
-                        height: 26px;
-                        border-radius: 7px;
-                        background: Theme.accent;
-                        Path {
-                            width: 14px;
-                            height: 14px;
-                            commands: "M7 5 L19 12 L7 19 Z";
-                            viewbox-width: 24;
-                            viewbox-height: 24;
-                            fill: Theme.on-accent;
-                        }
-                    }
-                    Text {
-                        text: "RustStream";
-                        color: Theme.text;
-                        font-size: Theme.font-l;
-                        font-weight: 700;
-                        vertical-alignment: center;
-                    }
-                }
+    if !root.in-session: Backdrop {
+        width: parent.width;
+        height: parent.height;
+    }
+
+    // Content (declared before the sidebar so the sidebar tooltips draw on top).
+    if !root.in-session: Rectangle {
+        x: 112px;
+        width: parent.width - self.x;
+        height: parent.height;
+        if root.page == 0: HomePage {
+            width: parent.width;
+            height: parent.height;
+            device-name: root.device-name;
+            fingerprint: root.fingerprint;
+            local-address: root.local-address;
+            hosting: root.hosting;
+            host-session-peer: root.host-session-peer;
+            computers: root.computers;
+            selected <=> root.selected-computer;
+            net-value: root.net-value;
+            net-spark: root.net-spark;
+            latency-value: root.latency-value;
+            latency-spark: root.latency-spark;
+            set-hosting(v) => { root.set-hosting(v); }
+            stop-host-session => { root.stop-host-session(); }
+            connect(id) => { root.connect(id); }
+            remove-computer(id) => { root.remove-computer(id); }
+            open-add => { root.add-open = true; }
+        }
+        if root.page == 1: DevicesPage {
+            width: parent.width;
+            height: parent.height;
+        }
+        if root.page == 2: PerformancePage {
+            width: parent.width;
+            height: parent.height;
+            profile <=> root.profile;
+            advanced <=> root.advanced;
+            adv-fps <=> root.adv-fps;
+            adv-bitrate <=> root.adv-bitrate;
+            gpus: root.gpus;
+            encoder-text: root.encoder-text;
+            stats: root.stats;
+            stats-title: root.stats-title;
+            set-profile(p) => { root.set-profile(p); }
+            set-advanced(a, f, b) => { root.set-advanced(a, f, b); }
+        }
+        if root.page == 3: SettingsPage {
+            width: parent.width;
+            height: parent.height;
+            hosting: root.hosting;
+            allow-pairing: root.allow-pairing;
+            port: root.port;
+            trusted: root.trusted;
+            device-name: root.device-name;
+            fingerprint-full: root.fingerprint-full;
+            dark: root.dark;
+            animations: root.animations;
+            set-hosting(v) => { root.set-hosting(v); }
+            set-allow-pairing(v) => { root.set-allow-pairing(v); }
+            revoke(id) => { root.revoke(id); }
+            rename-device(n) => { root.rename-device(n); }
+            set-dark(v) => { root.set-dark(v); }
+            set-animations(v) => { root.set-animations(v); }
+        }
+    }
+
+    // Icon-only glass sidebar.
+    if !root.in-session: Rectangle {
+        x: 14px;
+        y: 14px;
+        width: 84px;
+        height: parent.height - 28px;
+        background: Theme.sidebar;
+        border-radius: 22px;
+        border-width: 1px;
+        border-color: Theme.border;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: #00000066;
+        VerticalLayout {
+            padding: 14px;
+            padding-top: 24px;
+            padding-bottom: 18px;
+            spacing: 14px;
+            NavItem {
+                text: "Accueil";
+                icon: Icons.home;
+                selected: root.page == 0;
+                clicked => { root.page = 0; }
+            }
+            NavItem {
+                text: "Périphériques";
+                icon: Icons.devices;
+                selected: root.page == 1;
+                clicked => { root.page = 1; }
+            }
+            NavItem {
+                text: "Performances";
+                icon: Icons.performance;
+                selected: root.page == 2;
+                clicked => { root.page = 2; }
+            }
+            NavItem {
+                text: "Paramètres";
+                icon: Icons.settings;
+                selected: root.page == 3;
+                clicked => { root.page = 3; }
+            }
+            Rectangle { vertical-stretch: 1; }
+            // Sharing status; opens Settings where sharing is configured.
+            Rectangle {
+                width: 56px;
+                height: 56px;
+                border-radius: 16px;
+                background: Theme.surface;
+                border-width: 1px;
+                border-color: Theme.border;
                 NavItem {
-                    text: "Accueil";
-                    icon: Icons.home;
-                    selected: root.page == 0;
-                    clicked => { root.page = 0; }
-                }
-                NavItem {
-                    text: "Périphériques";
-                    icon: Icons.devices;
-                    selected: root.page == 1;
-                    clicked => { root.page = 1; }
-                }
-                NavItem {
-                    text: "Performances";
-                    icon: Icons.performance;
-                    selected: root.page == 2;
-                    clicked => { root.page = 2; }
-                }
-                NavItem {
-                    text: "Paramètres";
-                    icon: Icons.settings;
-                    selected: root.page == 3;
+                    text: root.host-session-peer != "" ? "Session en cours" : root.hosting ? "Partage actif · " + root.local-address : "Partage désactivé";
+                    icon: Icons.broadcast;
                     clicked => { root.page = 3; }
                 }
-                Rectangle { vertical-stretch: 1; }
-                // Discreet network status.
-                HorizontalLayout {
-                    padding-left: 10px;
-                    spacing: 8px;
-                    accessible-role: text;
-                    accessible-label: root.hosting ? "Partage actif" : "Partage désactivé";
-                    StatusDot {
-                        tint: root.host-session-peer != "" ? Theme.warning : root.hosting ? Theme.success : Theme.text-faint;
-                        y: (parent.height - self.height) / 2;
-                    }
-                    VerticalLayout {
-                        Text {
-                            text: root.host-session-peer != "" ? "Session en cours" : root.hosting ? "Partage actif" : "Partage désactivé";
-                            color: Theme.text-muted;
-                            font-size: Theme.font-s;
-                        }
-                        if root.hosting: Text {
-                            text: root.local-address;
-                            color: Theme.text-faint;
-                            font-size: Theme.font-xs;
-                        }
-                    }
+                StatusDot {
+                    x: parent.width - 16px;
+                    y: 8px;
+                    tint: root.host-session-peer != "" ? Theme.warning : root.hosting ? Theme.success : #8a94b0;
                 }
-            }
-        }
-        Rectangle {
-            width: 1px;
-            background: Theme.border;
-        }
-        // Content
-        Rectangle {
-            horizontal-stretch: 1;
-            if root.page == 0: HomePage {
-                width: parent.width;
-                height: parent.height;
-                device-name: root.device-name;
-                fingerprint: root.fingerprint;
-                local-address: root.local-address;
-                hosting: root.hosting;
-                host-session-peer: root.host-session-peer;
-                computers: root.computers;
-                set-hosting(v) => { root.set-hosting(v); }
-                stop-host-session => { root.stop-host-session(); }
-                connect(id) => { root.connect(id); }
-                remove-computer(id) => { root.remove-computer(id); }
-                open-add => { root.add-open = true; }
-            }
-            if root.page == 1: DevicesPage {
-                width: parent.width;
-                height: parent.height;
-            }
-            if root.page == 2: PerformancePage {
-                width: parent.width;
-                height: parent.height;
-                profile <=> root.profile;
-                advanced <=> root.advanced;
-                adv-fps <=> root.adv-fps;
-                adv-bitrate <=> root.adv-bitrate;
-                gpus: root.gpus;
-                encoder-text: root.encoder-text;
-                stats: root.stats;
-                stats-title: root.stats-title;
-                set-profile(p) => { root.set-profile(p); }
-                set-advanced(a, f, b) => { root.set-advanced(a, f, b); }
-            }
-            if root.page == 3: SettingsPage {
-                width: parent.width;
-                height: parent.height;
-                hosting: root.hosting;
-                allow-pairing: root.allow-pairing;
-                port: root.port;
-                trusted: root.trusted;
-                device-name: root.device-name;
-                fingerprint-full: root.fingerprint-full;
-                dark: root.dark;
-                animations: root.animations;
-                set-hosting(v) => { root.set-hosting(v); }
-                set-allow-pairing(v) => { root.set-allow-pairing(v); }
-                revoke(id) => { root.revoke(id); }
-                rename-device(n) => { root.rename-device(n); }
-                set-dark(v) => { root.set-dark(v); }
-                set-animations(v) => { root.set-animations(v); }
             }
         }
     }

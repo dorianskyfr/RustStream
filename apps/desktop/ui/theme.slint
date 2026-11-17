@@ -1,31 +1,41 @@
-// RustStream design tokens. Neutral palette, one discreet blue accent.
+// RustStream design tokens: deep navy, glass surfaces, cyan → blue → violet accents.
 
 export global Theme {
     in-out property <bool> dark: true;
     in-out property <bool> animations: true;
 
-    out property <color> bg: dark ? #0d0e11 : #f5f6f8;
-    out property <color> sidebar: dark ? #111317 : #eceef2;
-    out property <color> surface: dark ? #16181d : #ffffff;
-    out property <color> surface-hover: dark ? #1c1f25 : #f3f4f7;
-    out property <color> surface-2: dark ? #20232a : #eef0f3;
-    out property <color> border: dark ? #262a32 : #e1e4e9;
-    out property <color> text: dark ? #e9ebef : #14161a;
-    out property <color> text-muted: dark ? #959ba6 : #5d636e;
-    out property <color> text-faint: dark ? #6b717c : #8a909a;
-    out property <color> accent: dark ? #4d8dff : #2f6feb;
-    out property <color> accent-hover: dark ? #63a0ff : #255fd0;
-    out property <color> accent-soft: dark ? #4d8dff22 : #2f6feb18;
-    out property <color> on-accent: #ffffff;
-    out property <color> success: dark ? #3fcf8e : #18a058;
-    out property <color> warning: dark ? #e8b44a : #b7791f;
-    out property <color> danger: dark ? #f0565b : #d93036;
-    out property <color> focus: dark ? #7aa9ff : #2f6feb;
-    out property <color> scrim: dark ? #000000aa : #0f172a66;
+    out property <color> bg: dark ? #060914 : #eef2fb;
+    out property <color> sidebar: dark ? #0a1022e6 : #ffffffd9;
+    // Glass surfaces are translucent so the backdrop glows show through.
+    out property <color> surface: dark ? #0d1630e0 : #ffffffe6;
+    out property <color> surface-hover: dark ? #142040eb : #f4f7fff0;
+    out property <color> surface-2: dark ? #18233fcc : #e6ecf8;
+    out property <color> surface-solid: dark ? #0e1528 : #ffffff;
+    out property <color> border: dark ? #26355c : #d3dcef;
+    out property <color> border-strong: dark ? #34477a : #b9c6e3;
+    out property <color> text: dark ? #eef3ff : #0d1424;
+    out property <color> text-muted: dark ? #9aa8c7 : #4a5774;
+    out property <color> text-faint: dark ? #64739a : #8090b0;
 
-    out property <length> radius-s: 6px;
-    out property <length> radius-m: 10px;
-    out property <length> radius-l: 14px;
+    out property <color> cyan: #22d3ee;
+    out property <color> blue: #3b82f6;
+    out property <color> violet: #a855f7;
+    out property <color> accent: dark ? #3b9cff : #2563eb;
+    out property <color> accent-hover: dark ? #5bb0ff : #1d4ed8;
+    out property <color> accent-soft: dark ? #3b82f626 : #2563eb1a;
+    out property <brush> accent-gradient: @linear-gradient(90deg, #22d3ee 0%, #3b82f6 55%, #a855f7 100%);
+    out property <brush> glow-border: @linear-gradient(135deg, #22d3eecc 0%, #3b82f699 45%, #a855f7cc 100%);
+    out property <color> on-accent: #ffffff;
+
+    out property <color> success: dark ? #34d399 : #059669;
+    out property <color> warning: dark ? #fbbf24 : #b45309;
+    out property <color> danger: dark ? #fb7185 : #e11d48;
+    out property <color> focus: #22d3ee;
+    out property <color> scrim: dark ? #02040acc : #0f172a73;
+
+    out property <length> radius-s: 8px;
+    out property <length> radius-m: 14px;
+    out property <length> radius-l: 20px;
 
     out property <length> font-xs: 11px;
     out property <length> font-s: 12px;
@@ -34,8 +44,8 @@ export global Theme {
     out property <length> font-xl: 20px;
     out property <length> font-xxl: 26px;
 
-    out property <duration> fast: animations ? 120ms : 0ms;
-    out property <duration> normal: animations ? 200ms : 0ms;
+    out property <duration> fast: animations ? 140ms : 0ms;
+    out property <duration> normal: animations ? 220ms : 0ms;
 }
 
 // Vector icons drawn on a 24×24 grid (original artwork, stroke style).
@@ -43,8 +53,9 @@ export global Icons {
     out property <string> home: "M3.5 10.5 L12 3.8 L20.5 10.5 V20 H14.5 V14 H9.5 V20 H3.5 Z";
     out property <string> devices: "M7 8.5 H17 A4.5 4.5 0 0 1 17 17.5 H7 A4.5 4.5 0 0 1 7 8.5 Z M8.5 11 V15 M6.5 13 H10.5 M15.5 12 H15.6 M17.5 14 H17.6";
     out property <string> performance: "M3 12.5 H7 L9.5 6 L14 19 L16.5 12.5 H21";
-    out property <string> settings: "M4 7 H13 M17 7 H20 M4 17 H7 M11 17 H20 M15 4.5 V9.5 M9 14.5 V19.5";
+    out property <string> settings: "M12 8.6 A3.4 3.4 0 1 0 12 15.4 A3.4 3.4 0 1 0 12 8.6 Z M12 2.8 V5.2 M12 18.8 V21.2 M2.8 12 H5.2 M18.8 12 H21.2 M5.5 5.5 L7.2 7.2 M16.8 16.8 L18.5 18.5 M5.5 18.5 L7.2 16.8 M16.8 7.2 L18.5 5.5";
     out property <string> plus: "M12 5 V19 M5 12 H19";
+    out property <string> play: "M8 5.5 L18.5 12 L8 18.5 Z";
     out property <string> monitor: "M3.5 5 H20.5 V16 H3.5 Z M9 20 H15 M12 16 V20";
     out property <string> power: "M12 3.5 V11.5 M7 6.2 A7.5 7.5 0 1 0 17 6.2";
     out property <string> fullscreen: "M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15";
@@ -56,4 +67,10 @@ export global Icons {
     out property <string> usb: "M12 3.5 V16 M12 3.5 L10 6 M12 3.5 L14 6 M12 12 L8 9.5 V7.5 M12 14 L16 11.5 V9 M12 16 A2 2 0 1 0 12 20 A2 2 0 1 0 12 16";
     out property <string> link: "M10 14 L14 10 M8.5 11.5 L6.5 13.5 A3.2 3.2 0 0 0 11 18 L13 16 M15.5 12.5 L17.5 10.5 A3.2 3.2 0 0 0 13 6 L11 8";
     out property <string> check: "M5 12.5 L10 17 L19 7.5";
+    out property <string> signal: "M5 19 V16 M9.5 19 V12.5 M14 19 V9 M18.5 19 V5";
+    out property <string> gauge: "M4.5 16.5 A8 8 0 1 1 19.5 16.5 M12 13.5 L15.5 9.5 M12 13.5 H12.1";
+    out property <string> server: "M4.5 4.5 H19.5 V10.5 H4.5 Z M4.5 13.5 H19.5 V19.5 H4.5 Z M7.5 7.5 H8.5 M7.5 16.5 H8.5";
+    out property <string> chevron-down: "M6.5 9.5 L12 15 L17.5 9.5";
+    out property <string> dots: "M5.5 12 H5.7 M12 12 H12.2 M18.5 12 H18.7";
+    out property <string> broadcast: "M12 12 H12.1 M8.5 15.5 A5 5 0 0 1 8.5 8.5 M15.5 8.5 A5 5 0 0 1 15.5 15.5 M5.6 18.4 A9 9 0 0 1 5.6 5.6 M18.4 5.6 A9 9 0 0 1 18.4 18.4";
 }

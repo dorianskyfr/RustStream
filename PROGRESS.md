@@ -13,7 +13,8 @@ Phases 0 et 1 terminées ; phase 2 fonctionnelle de bout en bout **en boucle loc
 | Interface | Slint 1.19 (licence Royalty-free, attribution dans À propos) | docs/adr/0001-ui-framework.md |
 | Transport | QUIC (Quinn 0.11), TLS 1.3 ; contrôle et entrées en flux fiables, vidéo en datagrammes | ARCHITECTURE.md |
 | Identité | Certificat ECDSA P-256 auto-signé par appareil, empreinte SHA-256, clé chiffrée DPAPI | SECURITY.md |
-| Appairage | Code SAS à 6 chiffres, confirmé sur les deux appareils ; un client qui ne connaît pas l'hôte impose toujours l'appairage | SECURITY.md |
+| Appairage | Code SAS à 6 chiffres issu d'un échange engagement/révélation, confirmé sur les deux appareils ; un client qui ne connaît pas l'hôte impose toujours l'appairage | SECURITY.md |
+| Protocole | Version 2 (ALPN `ruststream/2`) : incompatible avec la v1 depuis l'appairage par engagement | crates/protocol |
 | Capture | DXGI Desktop Duplication (copie GPU→CPU tant que l'encodage est logiciel) | ARCHITECTURE.md |
 | Codec | OpenH264 logiciel en repli explicite ; encodeurs matériels à venir | docs/LICENSES.md (brevets) |
 | Licence | MIT OR Apache-2.0 | LICENSE-* |
@@ -29,11 +30,11 @@ Phases 0 et 1 terminées ; phase 2 fonctionnelle de bout en bout **en boucle loc
 - Entrées : injection `SendInput` avec relâchement garanti, hook clavier client, projection multi-écrans (tests unitaires).
 - Moteur de session : tests d'intégration en boucle locale avec QUIC/TLS/H.264 réels : appairage, reconnexion épinglée, révocation, refus, imposteur, appairage désactivé, une seule session à la fois, confirmation locale obligatoire du code.
 - CLI : `info`, `host`, `connect`, `trusted`, `bench-loopback`, `bench-capture`.
+- Application de bureau : nouvelle interface (fond marine, cartes en verre, barre latérale à icônes, carte principale avec sélecteur d'ordinateur, débit et latence en direct avec courbes, vignettes d'ordinateurs, barre de titre sombre). Session réelle lancée **depuis l'interface** entre deux instances sur le même PC (`RUSTSTREAM_CONFIG_DIR`) : même code affiché des deux côtés, appairage, flux reçu (≈ 2,5 Mbit/s, aller-retour 0,4 ms en boucle locale), fin de session par « Terminer ».
 
 ## En cours
 
-- Application de bureau Slint : interface écrite (4 sections, appairage, session plein écran, statistiques) ; compilation et essai manuel en cours.
-- Revue Codex du code sécurité / réseau / concurrence.
+- Essai entre deux PC physiques.
 
 ## Restant (par phase)
 
@@ -50,7 +51,7 @@ Phases 0 et 1 terminées ; phase 2 fonctionnelle de bout en bout **en boucle loc
 
 ## Prochaine tâche prioritaire
 
-1. Essai manuel de l'application de bureau (hôte + client sur la même machine, puis deux PC).
+1. Essai entre deux PC physiques (vidéo, entrées, reconnexion).
 2. Encodeur matériel Quick Sync via Media Foundation (candidat à la délégation à Codex).
 
 ## Commandes de reproduction
@@ -69,5 +70,6 @@ target/release/ruststream-cli.exe bench-capture --seconds 5
 2026-11-17, Windows 11, Rust 1.100.0 :
 - `cargo fmt --all -- --check` : OK.
 - `cargo clippy --workspace --all-targets` : 0 avertissement.
-- `cargo test --workspace` : **51 tests, 51 réussis** (protocol 13, security 11, input 5, intégration en boucle locale 5, core 4, codec 3, telemetry 3, platform-windows 3, capture 2, network 2).
-- Application de bureau : lancée ; Accueil, Périphériques, Performances et Paramètres affichés et navigables par automatisation UI (arbre d'accessibilité exposé). Session vidéo depuis l'interface : **pas encore essayée**.
+- `cargo test --workspace` : **56 tests, 56 réussis** (protocol 13, security 13, input 5, intégration en boucle locale 5, core 4, codec 3, telemetry 3, platform-windows 3, desktop 3, capture 2, network 2).
+- Revues Codex : 1re revue (SAS forçable hors ligne, image clé, zone d'écran, barre d'outils, tâches de session, saisie CLI) corrigée ; 2e revue (version du protocole, annulation d'appairage par identifiant, réponses anticipées en CLI) corrigée. Limite de 2 passes atteinte sur ce sujet.
+- Application de bureau : Accueil, Performances et Paramètres vérifiés par capture de la fenêtre ; session réelle entre deux instances locales réussie depuis l'interface.

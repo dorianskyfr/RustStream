@@ -1,18 +1,176 @@
-import { Theme } from "theme.slint";
+import { Theme, Icons } from "theme.slint";
 
 export component Icon inherits Path {
     in property <string> data;
-    in property <color> color: Theme.text;
+    in property <brush> color: Theme.text;
     in property <length> size: 18px;
+    in property <length> weight: 1.8px;
+    in property <bool> filled;
     width: self.size;
     height: self.size;
     commands: self.data;
     viewbox-width: 24;
     viewbox-height: 24;
     stroke: self.color;
-    stroke-width: 1.7px;
-    fill: transparent;
+    stroke-width: self.weight;
+    stroke-line-cap: round;
+    fill: self.filled ? self.color : transparent;
     accessible-role: none;
+}
+
+// Full-window backdrop: deep navy with soft cyan/violet glows and light waves.
+export component Backdrop inherits Rectangle {
+    background: Theme.bg;
+    clip: true;
+    Rectangle {
+        x: parent.width * 0.45;
+        y: -parent.height * 0.45;
+        width: parent.width * 0.9;
+        height: parent.height * 1.1;
+        background: @radial-gradient(circle, #3b82f6 0%, #3b82f600 70%);
+        opacity: Theme.dark ? 0.22 : 0.10;
+    }
+    Rectangle {
+        x: -parent.width * 0.25;
+        y: parent.height * 0.35;
+        width: parent.width * 0.8;
+        height: parent.height * 1.0;
+        background: @radial-gradient(circle, #a855f7 0%, #a855f700 70%);
+        opacity: Theme.dark ? 0.20 : 0.08;
+    }
+    Rectangle {
+        x: parent.width * 0.65;
+        y: parent.height * 0.55;
+        width: parent.width * 0.6;
+        height: parent.height * 0.8;
+        background: @radial-gradient(circle, #22d3ee 0%, #22d3ee00 70%);
+        opacity: Theme.dark ? 0.12 : 0.06;
+    }
+    // Violet hill along the bottom
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 1000;
+        viewbox-height: 600;
+        commands: "M0 470 C 160 420, 330 520, 520 480 S 820 400, 1000 430 L 1000 600 L 0 600 Z";
+        fill: @linear-gradient(180deg, #7c3aed40 0%, #7c3aed00 100%);
+        stroke: transparent;
+        opacity: Theme.dark ? 1 : 0.35;
+    }
+    // Big cyan arc behind the top right (glow + crisp line)
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 1000;
+        viewbox-height: 600;
+        commands: "M380 190 C 520 175, 600 70, 760 55 S 930 110, 1000 75 L 1000 600 L 380 600 Z";
+        fill: @linear-gradient(180deg, #0e7490 0%, #0e749000 45%);
+        stroke: transparent;
+        opacity: Theme.dark ? 0.35 : 0.12;
+    }
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 1000;
+        viewbox-height: 600;
+        commands: "M380 190 C 520 175, 600 70, 760 55 S 930 110, 1000 75";
+        fill: transparent;
+        stroke: @linear-gradient(90deg, #22d3ee00 0%, #22d3ee 40%, #8b5cf6 85%, #c084fc 100%);
+        stroke-width: 9px;
+        opacity: Theme.dark ? 0.16 : 0.08;
+    }
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 1000;
+        viewbox-height: 600;
+        commands: "M380 190 C 520 175, 600 70, 760 55 S 930 110, 1000 75";
+        fill: transparent;
+        stroke: @linear-gradient(90deg, #22d3ee00 0%, #22d3ee 40%, #8b5cf6 85%, #c084fc 100%);
+        stroke-width: 2px;
+        opacity: Theme.dark ? 0.85 : 0.35;
+    }
+    // Violet ribbon on the left
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 1000;
+        viewbox-height: 600;
+        commands: "M60 330 C 110 250, 170 230, 240 220 L 240 290 C 170 300, 110 300, 60 330 Z";
+        fill: @linear-gradient(90deg, #7c3aed00 0%, #7c3aed66 100%);
+        stroke: transparent;
+        opacity: Theme.dark ? 0.9 : 0.3;
+    }
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 1000;
+        viewbox-height: 600;
+        commands: "M60 330 C 110 250, 170 230, 240 220";
+        fill: transparent;
+        stroke: @linear-gradient(90deg, #a855f700 0%, #c084fc 100%);
+        stroke-width: 2px;
+        opacity: Theme.dark ? 0.8 : 0.3;
+    }
+    // Bottom right sweep
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 1000;
+        viewbox-height: 600;
+        commands: "M560 600 C 720 590, 860 560, 1000 470";
+        fill: transparent;
+        stroke: @linear-gradient(90deg, #8b5cf600 0%, #a855f7 70%, #22d3ee 100%);
+        stroke-width: 2px;
+        opacity: Theme.dark ? 0.7 : 0.3;
+    }
+}
+
+// Original abstract artwork used for screen previews (not a real thumbnail).
+export component ScreenArt inherits Rectangle {
+    in property <int> variant;
+    clip: true;
+    background: root.variant == 1 ? @linear-gradient(160deg, #120a2e 0%, #1d0f45 100%)
+        : root.variant == 2 ? @linear-gradient(160deg, #0d0b26 0%, #251048 100%)
+        : root.variant == 3 ? @linear-gradient(160deg, #06142e 0%, #0b2150 100%)
+        : @linear-gradient(160deg, #04102a 0%, #0a1f55 100%);
+    Rectangle {
+        x: parent.width * 0.25;
+        y: parent.height * 0.15;
+        width: parent.width * 0.9;
+        height: parent.height * 1.1;
+        background: @radial-gradient(circle,
+            (root.variant == 1 || root.variant == 2) ? #a855f7 : #3b82f6 0%,
+            #00000000 70%);
+        opacity: 0.55;
+    }
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 200;
+        viewbox-height: 120;
+        commands: root.variant == 1 ? "M0 95 C 40 90, 70 60, 110 70 S 170 40, 200 20 L 200 120 L 0 120 Z"
+            : root.variant == 2 ? "M0 100 C 50 100, 90 85, 130 60 S 185 30, 200 25 L 200 120 L 0 120 Z"
+            : root.variant == 3 ? "M0 90 C 40 110, 80 60, 120 55 S 180 85, 200 60 L 200 120 L 0 120 Z"
+            : "M0 80 C 30 50, 70 105, 110 75 S 160 30, 200 45 L 200 120 L 0 120 Z";
+        fill: (root.variant == 1 || root.variant == 2)
+            ? @linear-gradient(180deg, #a855f7cc 0%, #6d28d900 100%)
+            : @linear-gradient(180deg, #22d3eecc 0%, #2563eb00 100%);
+        stroke: transparent;
+    }
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 200;
+        viewbox-height: 120;
+        commands: root.variant == 1 ? "M0 95 C 40 90, 70 60, 110 70 S 170 40, 200 20"
+            : root.variant == 2 ? "M0 100 C 50 100, 90 85, 130 60 S 185 30, 200 25"
+            : root.variant == 3 ? "M0 90 C 40 110, 80 60, 120 55 S 180 85, 200 60"
+            : "M0 80 C 30 50, 70 105, 110 75 S 160 30, 200 45";
+        fill: transparent;
+        stroke: (root.variant == 1 || root.variant == 2) ? #d8b4fe : #67e8f9;
+        stroke-width: 1.5px;
+    }
 }
 
 // Keyboard-accessible button: Tab to focus, Enter/Space to activate.
@@ -23,11 +181,13 @@ export component Button {
     in property <bool> danger;
     in property <bool> quiet;
     in property <bool> enabled: true;
+    in property <length> icon-size: 16px;
+    in property <bool> icon-filled;
     // Accessible name for icon-only buttons.
     in property <string> label;
     callback clicked;
 
-    min-height: 34px;
+    min-height: 36px;
     horizontal-stretch: 0;
     accessible-role: button;
     accessible-label: root.text != "" ? root.text : root.label;
@@ -35,31 +195,35 @@ export component Button {
     accessible-action-default => { if (root.enabled) { root.clicked(); } }
     forward-focus: fs;
 
-    private property <color> base: root.primary ? Theme.accent
+    private property <brush> base: root.primary ? Theme.accent-gradient
         : root.danger ? Theme.danger
         : root.quiet ? transparent : Theme.surface-2;
-    private property <color> hover: root.primary ? Theme.accent-hover
-        : root.danger ? Theme.danger.brighter(10%)
-        : Theme.surface-hover;
-    private property <color> fg: (root.primary || root.danger) ? Theme.on-accent : Theme.text;
+    private property <brush> fg: (root.primary || root.danger) ? Theme.on-accent : Theme.text;
 
-    bg := Rectangle {
-        border-radius: Theme.radius-s;
-        background: !root.enabled ? Theme.surface-2 : ta.pressed ? root.hover.darker(8%) : ta.has-hover ? root.hover : root.base;
+    Rectangle {
+        border-radius: Theme.radius-s + 2px;
+        background: root.base;
         border-width: fs.has-focus ? 2px : (root.primary || root.danger || root.quiet) ? 0px : 1px;
         border-color: fs.has-focus ? Theme.focus : Theme.border;
-        opacity: root.enabled ? 1 : 0.5;
-        animate background { duration: Theme.fast; }
-
+        opacity: root.enabled ? 1 : 0.45;
+        drop-shadow-blur: root.primary && root.enabled ? 14px : 0px;
+        drop-shadow-color: #3b82f655;
+        // Hover / press overlay works for solid and gradient backgrounds.
+        Rectangle {
+            border-radius: parent.border-radius;
+            background: ta.pressed ? #00000033 : ta.has-hover ? #ffffff1a : #ffffff00;
+            animate background { duration: Theme.fast; }
+        }
         HorizontalLayout {
-            padding-left: root.text == "" ? 8px : 14px;
-            padding-right: root.text == "" ? 8px : 14px;
+            padding-left: root.text == "" ? 9px : 16px;
+            padding-right: root.text == "" ? 9px : 16px;
             spacing: 8px;
             alignment: center;
             if root.icon != "": Icon {
                 data: root.icon;
                 color: root.fg;
-                size: 16px;
+                size: root.icon-size;
+                filled: root.icon-filled;
                 y: (parent.height - self.height) / 2;
             }
             if root.text != "": Text {
@@ -88,48 +252,60 @@ export component Button {
     }
 }
 
+// Glass card.
 export component Card inherits Rectangle {
     in property <bool> highlighted;
-    background: Theme.surface;
+    background: self.highlighted ? Theme.surface-hover : Theme.surface;
     border-radius: Theme.radius-m;
     border-width: 1px;
-    border-color: self.highlighted ? Theme.accent : Theme.border;
+    border-color: self.highlighted ? Theme.cyan.with-alpha(0.7) : Theme.border;
+    drop-shadow-blur: self.highlighted ? 22px : 0px;
+    drop-shadow-color: #22d3ee40;
+    animate border-color, drop-shadow-blur { duration: Theme.fast; }
 }
 
+// Icon-only navigation entry with a hover label.
 export component NavItem {
     in property <string> text;
     in property <string> icon;
     in property <bool> selected;
     callback clicked;
 
-    height: 36px;
+    width: 56px;
+    height: 56px;
     accessible-role: tab;
     accessible-label: root.text;
     accessible-action-default => { root.clicked(); }
     forward-focus: fs;
 
     Rectangle {
-        border-radius: Theme.radius-s;
-        background: root.selected ? Theme.surface-2 : ta.has-hover ? Theme.surface-hover : transparent;
-        border-width: fs.has-focus ? 2px : 0px;
-        border-color: Theme.focus;
-        animate background { duration: Theme.fast; }
-        HorizontalLayout {
-            padding-left: 10px;
-            spacing: 10px;
-            Icon {
-                data: root.icon;
-                color: root.selected ? Theme.accent : Theme.text-muted;
-                size: 18px;
-                y: (parent.height - self.height) / 2;
-            }
-            Text {
-                text: root.text;
-                color: root.selected ? Theme.text : Theme.text-muted;
-                font-size: Theme.font-m;
-                font-weight: root.selected ? 600 : 500;
-                vertical-alignment: center;
-            }
+        border-radius: Theme.radius-m;
+        background: root.selected ? @linear-gradient(135deg, #22d3ee40 0%, #3b82f640 60%, #a855f740 100%)
+            : ta.has-hover ? Theme.surface-hover : transparent;
+        border-width: root.selected || fs.has-focus ? 1.5px : 0px;
+        border-color: fs.has-focus ? Theme.focus : Theme.cyan.with-alpha(0.65);
+        drop-shadow-blur: root.selected ? 18px : 0px;
+        drop-shadow-color: #22d3ee55;
+        Icon {
+            data: root.icon;
+            color: root.selected ? Theme.text : Theme.text-muted;
+            size: 24px;
+        }
+    }
+    if ta.has-hover || fs.has-focus: Rectangle {
+        x: parent.width + 10px;
+        y: (parent.height - self.height) / 2;
+        width: tip.preferred-width + 20px;
+        height: 28px;
+        border-radius: 8px;
+        background: Theme.surface-solid;
+        border-width: 1px;
+        border-color: Theme.border;
+        tip := Text {
+            text: root.text;
+            color: Theme.text;
+            font-size: Theme.font-s;
+            font-weight: 600;
         }
     }
     ta := TouchArea {
@@ -149,10 +325,12 @@ export component NavItem {
 
 export component StatusDot inherits Rectangle {
     in property <color> tint: Theme.success;
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
+    width: 9px;
+    height: 9px;
+    border-radius: 4.5px;
     background: self.tint;
+    drop-shadow-blur: 8px;
+    drop-shadow-color: self.tint.with-alpha(0.8);
 }
 
 export component Pill inherits Rectangle {
@@ -168,6 +346,8 @@ export component Pill inherits Rectangle {
         spacing: 6px;
         StatusDot {
             tint: root.tint;
+            width: 7px;
+            height: 7px;
             y: (parent.height - self.height) / 2;
         }
         Text {
@@ -175,6 +355,90 @@ export component Pill inherits Rectangle {
             color: root.tint;
             font-size: Theme.font-xs;
             font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Small line chart. `commands` is an SVG path on a 100×28 viewbox (from Rust).
+// Paths scale uniformly, so keep the element close to a 100:28 ratio.
+export component Sparkline inherits Path {
+    in property <string> data;
+    in property <bool> empty: data == "";
+    commands: self.empty ? "M0 26 L100 26" : self.data;
+    viewbox-width: 100;
+    viewbox-height: 28;
+    fill: transparent;
+    stroke: self.empty ? Theme.text-faint.with-alpha(0.5) : @linear-gradient(90deg, #22d3ee 0%, #3b82f6 55%, #a855f7 100%);
+    stroke-width: 2.2px;
+    accessible-role: none;
+}
+
+export component StatCard inherits Card {
+    in property <string> icon;
+    in property <string> title;
+    in property <string> value;
+    in property <string> spark;
+    min-height: 92px;
+    accessible-role: text;
+    accessible-label: root.title + " : " + root.value;
+    HorizontalLayout {
+        padding: 16px;
+        padding-right: 20px;
+        spacing: 14px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 42px;
+                height: 42px;
+                border-radius: 12px;
+                background: Theme.accent-soft;
+                Icon {
+                    data: root.icon;
+                    color: Theme.accent-gradient;
+                    size: 24px;
+                    weight: 2.4px;
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 4px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                color: Theme.text-muted;
+                font-size: Theme.font-s;
+                overflow: elide;
+            }
+            Text {
+                text: root.value;
+                color: Theme.text;
+                font-size: Theme.font-l;
+                font-weight: 700;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            Sparkline {
+                data: root.spark;
+                width: 126px;
+                height: 36px;
+            }
+        }
+    }
+}
+
+export component StatusDotLabel {
+    in property <string> text;
+    in property <color> tint;
+    HorizontalLayout {
+        spacing: 8px;
+        StatusDot { tint: root.tint; y: (parent.height - self.height) / 2; }
+        Text {
+            text: root.text;
+            color: Theme.text-muted;
+            font-size: Theme.font-s;
             vertical-alignment: center;
         }
     }
@@ -205,17 +469,17 @@ export component SectionTitle inherits Text {
     color: Theme.text-faint;
     font-size: Theme.font-xs;
     font-weight: 700;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.8px;
 }
 
 // A labelled row inside a settings card; the control goes in @children.
 export component SettingRow {
     in property <string> title;
     in property <string> description;
-    min-height: 56px;
+    min-height: 58px;
     HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 16px;
+        padding-left: 18px;
+        padding-right: 18px;
         padding-top: 10px;
         padding-bottom: 10px;
         spacing: 16px;
@@ -256,8 +520,8 @@ export component Toggle {
     in property <bool> enabled: true;
     callback toggled(bool);
 
-    width: 40px;
-    height: 22px;
+    width: 44px;
+    height: 24px;
     accessible-role: switch;
     accessible-label: root.label;
     accessible-checkable: true;
@@ -275,17 +539,18 @@ export component Toggle {
 
     Rectangle {
         border-radius: self.height / 2;
-        background: root.checked ? Theme.accent : Theme.surface-2;
+        background: root.checked ? Theme.accent-gradient : Theme.surface-2;
         border-width: fs.has-focus ? 2px : 1px;
-        border-color: fs.has-focus ? Theme.focus : root.checked ? Theme.accent : Theme.border;
+        border-color: fs.has-focus ? Theme.focus : root.checked ? Theme.cyan.with-alpha(0.6) : Theme.border;
         opacity: root.enabled ? 1 : 0.5;
-        animate background { duration: Theme.fast; }
-        knob := Rectangle {
-            width: 16px;
-            height: 16px;
+        drop-shadow-blur: root.checked ? 10px : 0px;
+        drop-shadow-color: #22d3ee55;
+        Rectangle {
+            width: 18px;
+            height: 18px;
             y: 3px;
             x: root.checked ? parent.width - self.width - 3px : 3px;
-            border-radius: 8px;
+            border-radius: 9px;
             background: root.checked ? Theme.on-accent : Theme.text-muted;
             animate x { duration: Theme.fast; easing: ease-out; }
         }
@@ -315,7 +580,8 @@ export component OptionCard {
     in property <bool> selected;
     callback clicked;
 
-    min-height: 96px;
+    min-height: 110px;
+    min-width: 150px;
     horizontal-stretch: 1;
     accessible-role: radio-button;
     accessible-label: root.title;
@@ -325,23 +591,30 @@ export component OptionCard {
     forward-focus: fs;
 
     Rectangle {
-        background: root.selected ? Theme.accent-soft : ta.has-hover ? Theme.surface-hover : Theme.surface;
+        background: root.selected ? @linear-gradient(135deg, #22d3ee26 0%, #3b82f626 55%, #a855f726 100%)
+            : ta.has-hover ? Theme.surface-hover : Theme.surface;
         border-radius: Theme.radius-m;
-        border-width: fs.has-focus || root.selected ? 2px : 1px;
-        border-color: fs.has-focus ? Theme.focus : root.selected ? Theme.accent : Theme.border;
-        animate background { duration: Theme.fast; }
+        border-width: fs.has-focus || root.selected ? 1.5px : 1px;
+        border-color: fs.has-focus ? Theme.focus : root.selected ? Theme.cyan.with-alpha(0.7) : Theme.border;
+        drop-shadow-blur: root.selected ? 20px : 0px;
+        drop-shadow-color: #22d3ee40;
         VerticalLayout {
-            padding: 14px;
+            padding: 16px;
             spacing: 6px;
-            Icon {
-                data: root.icon;
-                color: root.selected ? Theme.accent : Theme.text-muted;
+            // Wrapped so the fixed-size icon does not cap the card width.
+            HorizontalLayout {
+                Icon {
+                    data: root.icon;
+                    color: root.selected ? Theme.accent-gradient : Theme.text-muted;
+                    size: 20px;
+                }
+                Rectangle { horizontal-stretch: 1; }
             }
             Text {
                 text: root.title;
                 color: Theme.text;
                 font-size: Theme.font-m;
-                font-weight: 600;
+                font-weight: 700;
             }
             Text {
                 text: root.description;
@@ -370,7 +643,7 @@ export component OptionCard {
 // Centered modal dialog over a scrim.
 export component Dialog inherits Rectangle {
     in property <string> title;
-    in property <length> dialog-width: 420px;
+    in property <length> dialog-width: 440px;
     background: Theme.scrim;
     // Swallow clicks behind the dialog.
     TouchArea { }
@@ -379,14 +652,14 @@ export component Dialog inherits Rectangle {
         height: content.preferred-height;
         x: (root.width - self.width) / 2;
         y: (root.height - self.height) / 2;
-        background: Theme.surface;
+        background: Theme.surface-solid;
         border-radius: Theme.radius-l;
         border-width: 1px;
-        border-color: Theme.border;
-        drop-shadow-blur: 24px;
-        drop-shadow-color: #00000055;
+        border-color: Theme.border-strong;
+        drop-shadow-blur: 40px;
+        drop-shadow-color: #3b82f633;
         content := VerticalLayout {
-            padding: 22px;
+            padding: 24px;
             spacing: 14px;
             Text {
                 text: root.title;

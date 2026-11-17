@@ -4294,8 +4294,10 @@ name = "ruststream-desktop"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "raw-window-handle",
  "ruststream-core",
  "ruststream-input",
+ "ruststream-platform-windows",
  "ruststream-protocol",
  "ruststream-telemetry",
  "slint",
@@ -4630,6 +4632,7 @@ dependencies = [
  "i-slint-renderer-software",
  "once_cell",
  "pin-weak",
+ "raw-window-handle",
  "slint-macros",
  "vtable",
 ]

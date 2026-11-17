@@ -55,6 +55,7 @@ mod imp;
 #[cfg(windows)]
 pub use imp::{
     DpapiProtector, HighResolutionTimer, computer_name, enable_dpi_awareness, list_gpus,
+    style_title_bar,
 };
 
 #[cfg(test)]

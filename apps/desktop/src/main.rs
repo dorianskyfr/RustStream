@@ -8,7 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -121,6 +121,84 @@ struct App {
     client: Option<ClientSession>,
     next_session: u64,
     frames: Arc<FrameSlot>,
+    link: LinkHistory,
+}
+
+/// Recent bitrate / round-trip samples of the active session, for the home
+/// page sparklines. Cleared when a session starts or ends.
+#[derive(Debug, Default)]
+struct LinkHistory {
+    bitrate: VecDeque<f64>,
+    rtt: VecDeque<f64>,
+}
+
+const LINK_HISTORY_LEN: usize = 40;
+
+impl LinkHistory {
+    fn push(&mut self, bitrate_mbps: f64, rtt_ms: f64) {
+        for (q, v) in [(&mut self.bitrate, bitrate_mbps), (&mut self.rtt, rtt_ms)] {
+            if q.len() == LINK_HISTORY_LEN {
+                q.pop_front();
+            }
+            q.push_back(if v.is_finite() { v.max(0.0) } else { 0.0 });
+        }
+    }
+
+    fn clear(&mut self) {
+        self.bitrate.clear();
+        self.rtt.clear();
+    }
+}
+
+/// SVG path of a smooth sparkline on a 100×28 viewbox (empty with fewer
+/// than two samples). The scale starts at zero so small jitter stays small;
+/// segments are Catmull-Rom splines converted to cubic Béziers.
+fn sparkline_path(samples: &VecDeque<f64>) -> String {
+    use std::fmt::Write as _;
+    if samples.len() < 2 {
+        return String::new();
+    }
+    let max = samples.iter().copied().fold(0.0_f64, f64::max).max(1e-9);
+    let step = 100.0 / (samples.len() - 1) as f64;
+    let pts: Vec<(f64, f64)> = samples
+        .iter()
+        .enumerate()
+        .map(|(i, v)| (i as f64 * step, 26.0 - v / max * 23.0))
+        .collect();
+    let at = |i: usize| pts[i.min(pts.len() - 1)];
+    let mut path = format!("M{:.1} {:.1}", pts[0].0, pts[0].1);
+    for i in 0..pts.len() - 1 {
+        let (p0, p1, p2, p3) = (at(i.saturating_sub(1)), at(i), at(i + 1), at(i + 2));
+        let c1 = (p1.0 + (p2.0 - p0.0) / 6.0, p1.1 + (p2.1 - p0.1) / 6.0);
+        let c2 = (p2.0 - (p3.0 - p1.0) / 6.0, p2.1 - (p3.1 - p1.1) / 6.0);
+        let _ = write!(
+            path,
+            " C{:.1} {:.1} {:.1} {:.1} {:.1} {:.1}",
+            c1.0, c1.1, c2.0, c2.1, p2.0, p2.1
+        );
+    }
+    path
+}
+
+/// Dark title bar matching the app background (cosmetic, Windows only).
+fn style_title_bar(ui: &AppWindow, dark: bool) {
+    #[cfg(windows)]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let handle = ui.window().window_handle();
+        let raw = handle.window_handle().map(|h| h.as_raw());
+        tracing::debug!(?raw, "title bar handle");
+        if let Ok(RawWindowHandle::Win32(w)) = raw {
+            // Theme.bg #060914 as 0x00BBGGRR.
+            ruststream_platform_windows::style_title_bar(
+                w.hwnd.get(),
+                dark,
+                dark.then_some(0x0014_0906),
+            );
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = (ui, dark);
 }
 
 fn s(v: impl AsRef<str>) -> SharedString {
@@ -277,6 +355,23 @@ impl App {
         if let Err(e) = self.settings.save(&self.ctx.paths.settings()) {
             self.show_error(format!("Impossible d'enregistrer les paramètres : {e}"));
         }
+    }
+
+    fn push_link(&mut self, bitrate_mbps: f64, rtt_ms: f64) {
+        self.link.push(bitrate_mbps, rtt_ms);
+        self.ui
+            .set_net_value(s(format!("{bitrate_mbps:.1} Mbit/s")));
+        self.ui.set_latency_value(s(format!("{rtt_ms:.1} ms")));
+        self.ui.set_net_spark(s(sparkline_path(&self.link.bitrate)));
+        self.ui.set_latency_spark(s(sparkline_path(&self.link.rtt)));
+    }
+
+    fn clear_link(&mut self) {
+        self.link.clear();
+        self.ui.set_net_value(s("—"));
+        self.ui.set_latency_value(s("—"));
+        self.ui.set_net_spark(s(""));
+        self.ui.set_latency_spark(s(""));
     }
 
     fn show_error(&self, msg: impl AsRef<str>) {
@@ -466,6 +561,7 @@ impl App {
         }
         if self.client.as_ref().is_none_or(|c| !c.connected) {
             self.ui.set_stats(model(Vec::new()));
+            self.clear_link();
         }
     }
 
@@ -490,6 +586,9 @@ impl App {
                 }
             }
             HostEvent::SessionStarted { peer_name, .. } => {
+                if self.client.as_ref().is_none_or(|c| !c.connected) {
+                    self.clear_link();
+                }
                 self.host_peer = Some(peer_name);
                 self.refresh_hosting();
                 self.refresh_trusted();
@@ -499,6 +598,7 @@ impl App {
                     self.ui
                         .set_stats_title(s("SESSION EN COURS (CET ORDINATEUR EST PARTAGÉ)"));
                     self.ui.set_stats(model(host_stat_lines(&st)));
+                    self.push_link(st.bitrate_mbps, st.rtt_ms);
                 }
             }
             HostEvent::SessionEnded { peer_name, reason } => {
@@ -507,6 +607,7 @@ impl App {
                 self.refresh_hosting();
                 if self.client.as_ref().is_none_or(|c| !c.connected) {
                     self.ui.set_stats(model(Vec::new()));
+                    self.clear_link();
                 }
             }
             HostEvent::Warning(w) => self.show_error(w),
@@ -662,6 +763,7 @@ impl App {
                 displays,
                 newly_paired,
             } => {
+                self.clear_link();
                 let Some(c) = self.client.as_mut() else {
                     return;
                 };
@@ -728,7 +830,10 @@ impl App {
                 self.ui.set_stream_width(p.width as i32);
                 self.ui.set_stream_height(p.height as i32);
             }
-            ClientEvent::Stats(st) => self.ui.set_stats(model(session_stat_lines(&st))),
+            ClientEvent::Stats(st) => {
+                self.ui.set_stats(model(session_stat_lines(&st)));
+                self.push_link(st.bitrate_mbps, st.rtt_ms);
+            }
             ClientEvent::Disconnected {
                 reason,
                 error,
@@ -757,7 +862,7 @@ impl App {
         }
     }
 
-    fn end_session_ui(&self) {
+    fn end_session_ui(&mut self) {
         let ui = &self.ui;
         if ui.get_fullscreen() {
             ui.window().set_fullscreen(false);
@@ -770,6 +875,7 @@ impl App {
         ui.set_frame(Image::default());
         ui.set_stats(model(Vec::new()));
         ui.set_remote_displays(model(Vec::new()));
+        self.clear_link();
         self.refresh_computers();
     }
 
@@ -927,6 +1033,7 @@ fn wire_callbacks(ui: &AppWindow) {
             a.save_settings();
             a.ui.set_dark(v);
             a.ui.invoke_apply_theme();
+            style_title_bar(&a.ui, v);
         });
     });
     ui.on_set_animations(|v| {
@@ -1163,6 +1270,7 @@ fn main() -> anyhow::Result<()> {
             discovery_stop,
             client: None,
             next_session: 0,
+            link: LinkHistory::default(),
             frames: Arc::new(FrameSlot {
                 frame: Mutex::new(None),
                 pending: AtomicBool::new(false),
@@ -1183,7 +1291,13 @@ fn main() -> anyhow::Result<()> {
         Duration::from_millis(250),
         move || {
             n += 1;
-            with_app(|a| a.tick(n));
+            with_app(|a| {
+                if n == 1 {
+                    // The native window exists once the event loop runs.
+                    style_title_bar(&a.ui, a.settings.theme == ThemePref::Dark);
+                }
+                a.tick(n);
+            });
         },
     );
 
@@ -1209,4 +1323,41 @@ fn main() -> anyhow::Result<()> {
         app.rt.shutdown_timeout(Duration::from_secs(2));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sparkline_needs_two_samples() {
+        let mut q = VecDeque::new();
+        assert_eq!(sparkline_path(&q), "");
+        q.push_back(3.0);
+        assert_eq!(sparkline_path(&q), "");
+    }
+
+    #[test]
+    fn sparkline_spans_viewbox() {
+        let q: VecDeque<f64> = [0.0, 5.0, 10.0].into_iter().collect();
+        let p = sparkline_path(&q);
+        assert!(p.starts_with("M0.0 26.0 C"), "{p}");
+        assert!(p.ends_with(" 100.0 3.0"), "{p}");
+        let flat: VecDeque<f64> = [0.0, 0.0].into_iter().collect();
+        assert_eq!(
+            sparkline_path(&flat),
+            "M0.0 26.0 C16.7 26.0 83.3 26.0 100.0 26.0"
+        );
+    }
+
+    #[test]
+    fn link_history_is_bounded_and_sanitised() {
+        let mut h = LinkHistory::default();
+        for i in 0..100 {
+            h.push(f64::from(i), f64::NAN);
+        }
+        assert_eq!(h.bitrate.len(), LINK_HISTORY_LEN);
+        assert_eq!(h.bitrate.back(), Some(&99.0));
+        assert!(h.rtt.iter().all(|v| *v == 0.0));
+    }
 }
