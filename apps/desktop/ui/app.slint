@@ -1,0 +1,1231 @@
+import { LineEdit, ScrollView, Slider, Spinner, AboutSlint, Palette } from "std-widgets.slint";
+import { Theme, Icons } from "theme.slint";
+import {
+    Icon, Button, Card, NavItem, StatusDot, Pill, PageHeader, SectionTitle,
+    SettingRow, Divider, Toggle, OptionCard, Dialog
+} from "widgets.slint";
+
+export { Theme }
+
+export struct ComputerItem {
+    id: string,
+    name: string,
+    address: string,
+    status: string,
+    online: bool,
+    saved: bool,
+    fingerprint: string,
+}
+
+export struct TrustedItem {
+    id: string,
+    name: string,
+    fingerprint: string,
+    last-seen: string,
+}
+
+export struct StatLine {
+    label: string,
+    value: string,
+}
+
+component HomePage {
+    in property <string> device-name;
+    in property <string> fingerprint;
+    in property <string> local-address;
+    in property <bool> hosting;
+    in property <string> host-session-peer;
+    in property <[ComputerItem]> computers;
+    callback set-hosting(bool);
+    callback stop-host-session();
+    callback connect(string);
+    callback remove-computer(string);
+    callback open-add();
+
+    sv := ScrollView {
+        width: root.width;
+        height: root.height;
+        VerticalLayout {
+            width: sv.visible-width;
+            padding: 28px;
+            padding-top: 24px;
+            spacing: 18px;
+            alignment: start;
+
+            PageHeader {
+                title: "Ordinateurs";
+                subtitle: "Connectez-vous à un ordinateur ou partagez celui-ci.";
+            }
+
+            // This computer.
+            Card {
+                HorizontalLayout {
+                    padding: 16px;
+                    spacing: 14px;
+                    Rectangle {
+                        width: 40px;
+                        height: 40px;
+                        border-radius: Theme.radius-s;
+                        background: Theme.accent-soft;
+                        Icon { data: Icons.monitor; color: Theme.accent; size: 20px; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 3px;
+                        horizontal-stretch: 1;
+                        HorizontalLayout {
+                            spacing: 10px;
+                            alignment: start;
+                            Text {
+                                text: root.device-name;
+                                color: Theme.text;
+                                font-size: Theme.font-l;
+                                font-weight: 600;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                            Pill {
+                                text: "Cet ordinateur";
+                                tint: Theme.text-muted;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+                        Text {
+                            text: root.hosting
+                                ? "Partage activé · " + root.local-address + " · empreinte " + root.fingerprint
+                                : "Partage désactivé · empreinte " + root.fingerprint;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-s;
+                            overflow: elide;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 0;
+                        HorizontalLayout {
+                            spacing: 10px;
+                            Text {
+                                text: "Partager";
+                                color: Theme.text-muted;
+                                font-size: Theme.font-s;
+                                vertical-alignment: center;
+                            }
+                            Toggle {
+                                label: "Partager cet ordinateur";
+                                checked: root.hosting;
+                                toggled(v) => { root.set-hosting(v); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Visible indicator whenever someone controls this computer.
+            if root.host-session-peer != "": Rectangle {
+                background: Theme.warning.with-alpha(0.12);
+                border-radius: Theme.radius-m;
+                border-width: 1px;
+                border-color: Theme.warning.with-alpha(0.5);
+                accessible-role: text;
+                accessible-label: "Session active : " + root.host-session-peer + " contrôle cet ordinateur";
+                HorizontalLayout {
+                    padding: 12px;
+                    padding-left: 16px;
+                    spacing: 12px;
+                    StatusDot { tint: Theme.warning; y: (parent.height - self.height) / 2; }
+                    Text {
+                        text: "Session active : « " + root.host-session-peer + " » contrôle cet ordinateur.";
+                        color: Theme.text;
+                        font-size: Theme.font-m;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        wrap: word-wrap;
+                    }
+                    Button {
+                        text: "Terminer";
+                        danger: true;
+                        clicked => { root.stop-host-session(); }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 12px;
+                SectionTitle {
+                    text: "ORDINATEURS";
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                Button {
+                    text: "Ajouter un ordinateur";
+                    icon: Icons.plus;
+                    clicked => { root.open-add(); }
+                }
+            }
+
+            if root.computers.length == 0: Card {
+                VerticalLayout {
+                    padding: 28px;
+                    spacing: 8px;
+                    alignment: center;
+                    Icon {
+                        data: Icons.link;
+                        color: Theme.text-faint;
+                        size: 26px;
+                        x: (parent.width - self.width) / 2;
+                    }
+                    Text {
+                        text: "Aucun ordinateur pour l'instant";
+                        color: Theme.text;
+                        font-size: Theme.font-m;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "Activez « Partager » sur l'autre PC : il apparaîtra ici s'il est sur le même réseau. Sinon, ajoutez-le avec son adresse.";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-s;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            for c in root.computers: Card {
+                HorizontalLayout {
+                    padding: 14px;
+                    padding-left: 16px;
+                    spacing: 14px;
+                    Icon {
+                        data: Icons.monitor;
+                        color: c.online ? Theme.text : Theme.text-faint;
+                        size: 22px;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 3px;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: c.name;
+                            color: Theme.text;
+                            font-size: Theme.font-m;
+                            font-weight: 600;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: c.address + (c.fingerprint != "" ? " · " + c.fingerprint : "");
+                            color: Theme.text-muted;
+                            font-size: Theme.font-s;
+                            overflow: elide;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Pill {
+                            text: c.status;
+                            tint: c.online ? Theme.success : Theme.text-faint;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Button {
+                            text: "Se connecter";
+                            primary: true;
+                            clicked => { root.connect(c.id); }
+                        }
+                    }
+                    if c.saved: VerticalLayout {
+                        alignment: center;
+                        Button {
+                            icon: Icons.trash;
+                            label: "Retirer " + c.name;
+                            quiet: true;
+                            clicked => { root.remove-computer(c.id); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+component InfoCard inherits Card {
+    in property <string> title;
+    in property <string> description;
+    in property <string> icon;
+    in property <string> status;
+    in property <color> status-color: Theme.text-faint;
+    HorizontalLayout {
+        padding: 16px;
+        spacing: 14px;
+        Rectangle {
+            width: 40px;
+            height: 40px;
+            border-radius: Theme.radius-s;
+            background: Theme.surface-2;
+            Icon { data: root.icon; color: Theme.text-muted; size: 20px; }
+        }
+        VerticalLayout {
+            spacing: 4px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: Theme.font-m;
+                font-weight: 600;
+            }
+            Text {
+                text: root.description;
+                color: Theme.text-muted;
+                font-size: Theme.font-s;
+                wrap: word-wrap;
+            }
+        }
+        VerticalLayout {
+            alignment: start;
+            Pill { text: root.status; tint: root.status-color; }
+        }
+    }
+}
+
+component DevicesPage {
+    sv := ScrollView {
+        width: root.width;
+        height: root.height;
+        VerticalLayout {
+            width: sv.visible-width;
+            padding: 28px;
+            padding-top: 24px;
+            spacing: 14px;
+            alignment: start;
+            PageHeader {
+                title: "Périphériques";
+                subtitle: "Ce qui est transmis à l'ordinateur distant pendant une session.";
+            }
+            InfoCard {
+                title: "Clavier et souris";
+                icon: Icons.keyboard;
+                status: "Actif en session";
+                status-color: Theme.success;
+                description: "Les touches sont envoyées par code matériel : la disposition du clavier distant s'applique. Le clavier est capturé uniquement quand la fenêtre RustStream est au premier plan. Ctrl+Alt+Maj+Q rend le clavier à cet ordinateur.";
+            }
+            InfoCard {
+                title: "Manettes";
+                icon: Icons.devices;
+                status: "Pas encore disponible";
+                description: "La prise en charge des manettes est prévue dans une prochaine version (phase 3 de la feuille de route).";
+            }
+            InfoCard {
+                title: "Redirection USB";
+                icon: Icons.usb;
+                status: "Pas encore disponible";
+                description: "La redirection de périphériques USB (clés, imprimantes, webcams…) est prévue en phase 4. Aucun périphérique n'est partagé, et rien ne le sera sans votre autorisation explicite pour chaque appareil.";
+            }
+        }
+    }
+}
+
+component PerformancePage {
+    in-out property <int> profile;
+    in-out property <bool> advanced;
+    in-out property <int> adv-fps;
+    in-out property <int> adv-bitrate;
+    in property <[string]> gpus;
+    in property <string> encoder-text;
+    in property <[StatLine]> stats;
+    in property <string> stats-title;
+    callback set-profile(int);
+    callback set-advanced(bool, int, int);
+
+    sv := ScrollView {
+        width: root.width;
+        height: root.height;
+        VerticalLayout {
+            width: sv.visible-width;
+            padding: 28px;
+            padding-top: 24px;
+            spacing: 18px;
+            alignment: start;
+            PageHeader {
+                title: "Performances";
+                subtitle: "Choisissez un profil : RustStream règle le reste.";
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                OptionCard {
+                    title: "Automatique";
+                    description: "Bon équilibre pour la plupart des usages. 60 i/s, 20 Mbit/s.";
+                    icon: Icons.check;
+                    selected: !root.advanced && root.profile == 0;
+                    clicked => { root.set-profile(0); }
+                }
+                OptionCard {
+                    title: "Performance";
+                    description: "Priorité à la réactivité. Jusqu'à 120 i/s, 15 Mbit/s.";
+                    icon: Icons.performance;
+                    selected: !root.advanced && root.profile == 1;
+                    clicked => { root.set-profile(1); }
+                }
+                OptionCard {
+                    title: "Qualité";
+                    description: "Priorité à l'image. 60 i/s, 40 Mbit/s.";
+                    icon: Icons.monitor;
+                    selected: !root.advanced && root.profile == 2;
+                    clicked => { root.set-profile(2); }
+                }
+            }
+            Card {
+                VerticalLayout {
+                    SettingRow {
+                        title: "Mode avancé";
+                        description: "Fixer vous-même la fréquence d'images et le débit. La fréquence reste limitée par l'écran de l'ordinateur distant.";
+                        Toggle {
+                            label: "Mode avancé";
+                            checked: root.advanced;
+                            toggled(v) => { root.set-advanced(v, root.adv-fps, root.adv-bitrate); }
+                        }
+                    }
+                    if root.advanced: Divider { }
+                    if root.advanced: SettingRow {
+                        title: "Images par seconde";
+                        HorizontalLayout {
+                            spacing: 6px;
+                            for f in [30, 60, 120, 144, 165, 240]: Button {
+                                text: f;
+                                primary: root.adv-fps == f;
+                                clicked => {
+                                    root.adv-fps = f;
+                                    root.set-advanced(true, root.adv-fps, root.adv-bitrate);
+                                }
+                            }
+                        }
+                    }
+                    if root.advanced: Divider { }
+                    if root.advanced: SettingRow {
+                        title: "Débit vidéo";
+                        description: root.adv-bitrate + " Mbit/s";
+                        Slider {
+                            width: 220px;
+                            minimum: 2;
+                            maximum: 150;
+                            value: root.adv-bitrate;
+                            changed(v) => {
+                                root.adv-bitrate = round(v);
+                                root.set-advanced(true, root.adv-fps, root.adv-bitrate);
+                            }
+                        }
+                    }
+                }
+            }
+            SectionTitle { text: "MATÉRIEL"; }
+            Card {
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 6px;
+                    for g in root.gpus: Text {
+                        text: g;
+                        color: Theme.text;
+                        font-size: Theme.font-m;
+                    }
+                    Text {
+                        text: root.encoder-text;
+                        color: Theme.text-muted;
+                        font-size: Theme.font-s;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+            SectionTitle { text: root.stats-title; }
+            Card {
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 6px;
+                    if root.stats.length == 0: Text {
+                        text: "Les statistiques s'affichent pendant une session.";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-s;
+                    }
+                    for s in root.stats: HorizontalLayout {
+                        Text {
+                            text: s.label;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-s;
+                            horizontal-stretch: 1;
+                        }
+                        Text {
+                            text: s.value;
+                            color: Theme.text;
+                            font-size: Theme.font-s;
+                            font-weight: 600;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+component SettingsPage {
+    in property <bool> hosting;
+    in property <bool> allow-pairing;
+    in property <int> port;
+    in property <[TrustedItem]> trusted;
+    in property <string> device-name;
+    in property <string> fingerprint-full;
+    in property <bool> dark;
+    in property <bool> animations;
+    callback set-hosting(bool);
+    callback set-allow-pairing(bool);
+    callback revoke(string);
+    callback rename-device(string);
+    callback set-dark(bool);
+    callback set-animations(bool);
+
+    sv := ScrollView {
+        width: root.width;
+        height: root.height;
+        VerticalLayout {
+            width: sv.visible-width;
+            padding: 28px;
+            padding-top: 24px;
+            spacing: 14px;
+            alignment: start;
+            PageHeader {
+                title: "Paramètres";
+            }
+
+            SectionTitle { text: "PARTAGE ET SÉCURITÉ"; }
+            Card {
+                VerticalLayout {
+                    SettingRow {
+                        title: "Autoriser les connexions";
+                        description: "Port UDP " + root.port + ". Rien n'est exposé sur le réseau tant que c'est désactivé.";
+                        Toggle {
+                            label: "Autoriser les connexions";
+                            checked: root.hosting;
+                            toggled(v) => { root.set-hosting(v); }
+                        }
+                    }
+                    Divider { }
+                    SettingRow {
+                        title: "Accepter de nouveaux appareils";
+                        description: "Chaque nouvel appareil doit être approuvé ici, après vérification d'un code à 6 chiffres affiché sur les deux écrans.";
+                        Toggle {
+                            label: "Accepter de nouveaux appareils";
+                            checked: root.allow-pairing;
+                            toggled(v) => { root.set-allow-pairing(v); }
+                        }
+                    }
+                }
+            }
+
+            SectionTitle { text: "APPAREILS AUTORISÉS À SE CONNECTER"; }
+            Card {
+                VerticalLayout {
+                    if root.trusted.length == 0: HorizontalLayout {
+                        padding-left: 16px;
+                        height: 48px;
+                        Text {
+                            text: "Aucun appareil autorisé.";
+                            color: Theme.text-muted;
+                            font-size: Theme.font-s;
+                            vertical-alignment: center;
+                        }
+                    }
+                    for t[i] in root.trusted: VerticalLayout {
+                        if i > 0: Divider { }
+                        SettingRow {
+                            title: t.name;
+                            description: t.fingerprint + " · " + t.last-seen;
+                            Button {
+                                text: "Révoquer";
+                                quiet: true;
+                                clicked => { root.revoke(t.id); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SectionTitle { text: "IDENTITÉ"; }
+            Card {
+                VerticalLayout {
+                    SettingRow {
+                        title: "Nom de cet ordinateur";
+                        description: "Visible par les autres appareils.";
+                        name-edit := LineEdit {
+                            width: 220px;
+                            text: root.device-name;
+                            accessible-label: "Nom de cet ordinateur";
+                            accepted(text) => { root.rename-device(text); }
+                        }
+                    }
+                    Divider { }
+                    SettingRow {
+                        title: "Empreinte de l'appareil";
+                        description: root.fingerprint-full;
+                    }
+                }
+            }
+
+            SectionTitle { text: "APPARENCE"; }
+            Card {
+                VerticalLayout {
+                    SettingRow {
+                        title: "Mode sombre";
+                        Toggle {
+                            label: "Mode sombre";
+                            checked: root.dark;
+                            toggled(v) => { root.set-dark(v); }
+                        }
+                    }
+                    Divider { }
+                    SettingRow {
+                        title: "Animations";
+                        description: "Transitions courtes de l'interface.";
+                        Toggle {
+                            label: "Animations";
+                            checked: root.animations;
+                            toggled(v) => { root.set-animations(v); }
+                        }
+                    }
+                }
+            }
+
+            SectionTitle { text: "À PROPOS"; }
+            Card {
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+                    Text {
+                        text: "RustStream 0.1.0 — préversion de développement";
+                        color: Theme.text;
+                        font-size: Theme.font-m;
+                        font-weight: 600;
+                    }
+                    Text {
+                        text: "Logiciel libre, licence MIT ou Apache-2.0. Encodage vidéo actuel : OpenH264 (logiciel). Aucune télémétrie : les statistiques restent sur cet ordinateur.";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-s;
+                        wrap: word-wrap;
+                    }
+                    HorizontalLayout {
+                        alignment: start;
+                        AboutSlint { max-width: 220px; }
+                    }
+                }
+            }
+        }
+    }
+}
+
+component SessionView inherits Rectangle {
+    in property <image> frame;
+    in property <int> stream-width;
+    in property <int> stream-height;
+    in property <string> session-title;
+    in property <[StatLine]> stats;
+    in property <[string]> remote-displays;
+    in property <int> remote-display;
+    in property <bool> fullscreen;
+    in property <bool> capture-paused;
+    in-out property <bool> show-stats;
+    in property <bool> waiting;
+    callback disconnect();
+    callback toggle-fullscreen();
+    callback select-display(int);
+    callback pointer(float, float);
+    callback button(int, bool);
+    callback wheel(float, float);
+    callback resume-capture();
+
+    background: #000000;
+    private property <float> sw: max(1, root.stream-width);
+    private property <float> sh: max(1, root.stream-height);
+    private property <float> fit: min(root.width / 1px / sw, root.height / 1px / sh);
+    private property <bool> toolbar-visible: root.waiting || root.capture-paused || bar-ta.has-hover
+        || (stream-ta.has-hover && stream-ta.mouse-y + img.y < 64px);
+
+    img := Image {
+        source: root.frame;
+        width: root.sw * root.fit * 1px;
+        height: root.sh * root.fit * 1px;
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        image-fit: fill;
+        accessible-role: image;
+        accessible-label: "Écran distant";
+    }
+
+    stream-ta := TouchArea {
+        x: img.x;
+        y: img.y;
+        width: img.width;
+        height: img.height;
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.move) {
+                root.pointer(self.mouse-x / self.width, self.mouse-y / self.height);
+            } else if (e.kind == PointerEventKind.down || e.kind == PointerEventKind.up) {
+                if (root.capture-paused && e.kind == PointerEventKind.down) {
+                    root.resume-capture();
+                }
+                root.pointer(self.mouse-x / self.width, self.mouse-y / self.height);
+                root.button(
+                    e.button == PointerEventButton.left ? 0
+                        : e.button == PointerEventButton.right ? 1
+                        : e.button == PointerEventButton.middle ? 2
+                        : e.button == PointerEventButton.back ? 3
+                        : e.button == PointerEventButton.forward ? 4 : -1,
+                    e.kind == PointerEventKind.down);
+            }
+        }
+        scroll-event(e) => {
+            root.wheel(e.delta-x / 1px, e.delta-y / 1px);
+            accept
+        }
+    }
+
+    if root.waiting: VerticalLayout {
+        alignment: center;
+        spacing: 12px;
+        Spinner {
+            indeterminate: true;
+            width: 32px;
+            height: 32px;
+            x: (parent.width - self.width) / 2;
+        }
+        Text {
+            text: "En attente de l'image…";
+            color: #c8ccd4;
+            font-size: Theme.font-m;
+            horizontal-alignment: center;
+        }
+    }
+
+    // Auto-hiding control bar.
+    bar := Rectangle {
+        y: root.toolbar-visible ? 12px : -self.height - 4px;
+        x: (root.width - self.width) / 2;
+        width: bar-layout.preferred-width;
+        height: 44px;
+        background: #16181dee;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: #2a2e37;
+        animate y { duration: Theme.normal; easing: ease-out; }
+        bar-ta := TouchArea { }
+        bar-layout := HorizontalLayout {
+            padding: 5px;
+            padding-left: 12px;
+            spacing: 4px;
+            Text {
+                text: root.session-title;
+                color: #e9ebef;
+                font-size: Theme.font-s;
+                font-weight: 600;
+                vertical-alignment: center;
+                max-width: 240px;
+                overflow: elide;
+            }
+            Rectangle { width: 8px; }
+            for d[i] in root.remote-displays: Button {
+                text: d;
+                quiet: i != root.remote-display;
+                primary: i == root.remote-display;
+                clicked => { root.select-display(i); }
+            }
+            Button {
+                icon: Icons.stats;
+                label: "Statistiques";
+                quiet: !root.show-stats;
+                clicked => { root.show-stats = !root.show-stats; }
+            }
+            Button {
+                icon: Icons.fullscreen;
+                label: root.fullscreen ? "Quitter le plein écran" : "Plein écran";
+                quiet: true;
+                clicked => { root.toggle-fullscreen(); }
+            }
+            Button {
+                text: "Déconnecter";
+                icon: Icons.power;
+                danger: true;
+                clicked => { root.disconnect(); }
+            }
+        }
+    }
+
+    if root.capture-paused: Rectangle {
+        y: root.height - 56px;
+        x: (root.width - self.width) / 2;
+        width: hint.preferred-width + 28px;
+        height: 36px;
+        border-radius: 18px;
+        background: #16181dee;
+        hint := Text {
+            text: "Clavier rendu à cet ordinateur — cliquez sur l'image pour le capturer à nouveau";
+            color: #e9ebef;
+            font-size: Theme.font-s;
+        }
+    }
+
+    if root.show-stats: Rectangle {
+        x: root.width - self.width - 12px;
+        y: 64px;
+        width: 250px;
+        height: stats-layout.preferred-height;
+        background: #0d0e11dd;
+        border-radius: 10px;
+        stats-layout := VerticalLayout {
+            padding: 12px;
+            spacing: 4px;
+            for s in root.stats: HorizontalLayout {
+                Text {
+                    text: s.label;
+                    color: #959ba6;
+                    font-size: Theme.font-xs;
+                    horizontal-stretch: 1;
+                }
+                Text {
+                    text: s.value;
+                    color: #e9ebef;
+                    font-size: Theme.font-xs;
+                    font-weight: 600;
+                }
+            }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: root.in-session ? root.session-title + " — RustStream" : "RustStream";
+    preferred-width: 1080px;
+    preferred-height: 700px;
+    min-width: 760px;
+    min-height: 520px;
+    background: root.in-session ? #000000 : Theme.bg;
+    default-font-family: "Segoe UI";
+    icon: @image-url("../assets/icon.png");
+
+    in-out property <bool> dark <=> Theme.dark;
+    in-out property <bool> animations <=> Theme.animations;
+    in-out property <int> page: 0;
+
+    // Local computer
+    in property <string> device-name;
+    in property <string> fingerprint;
+    in property <string> fingerprint-full;
+    in property <string> local-address;
+    in property <bool> hosting;
+    in property <bool> allow-pairing;
+    in property <int> port;
+    in property <string> host-session-peer;
+    in property <[ComputerItem]> computers;
+    in property <[TrustedItem]> trusted;
+
+    // Performance
+    in-out property <int> profile;
+    in-out property <bool> advanced;
+    in-out property <int> adv-fps: 60;
+    in-out property <int> adv-bitrate: 20;
+    in property <[string]> gpus;
+    in property <string> encoder-text;
+    in property <[StatLine]> stats;
+    in property <string> stats-title: "STATISTIQUES";
+
+    // Session
+    in property <bool> in-session;
+    in property <bool> waiting-frame;
+    in property <image> frame;
+    in property <int> stream-width: 16;
+    in property <int> stream-height: 9;
+    in property <string> session-title;
+    in property <[string]> remote-displays;
+    in property <int> remote-display;
+    in property <bool> fullscreen;
+    in property <bool> capture-paused;
+    in-out property <bool> show-stats;
+
+    // Overlays
+    in property <bool> connecting;
+    in property <string> connecting-text;
+    in property <string> client-code;
+    in property <string> host-request-name;
+    in property <string> host-request-code;
+    in property <string> error-text;
+    in-out property <bool> add-open;
+
+    callback connect(string);
+    callback remove-computer(string);
+    callback add-computer(string);
+    callback set-hosting(bool);
+    callback set-allow-pairing(bool);
+    callback stop-host-session();
+    callback revoke(string);
+    callback rename-device(string);
+    callback set-dark(bool);
+    callback set-animations(bool);
+    callback set-profile(int);
+    callback set-advanced(bool, int, int);
+    callback cancel-connect();
+    callback confirm-pairing(bool);
+    callback answer-pairing(bool);
+    callback disconnect();
+    callback toggle-fullscreen();
+    callback select-display(int);
+    callback dismiss-error();
+    callback stream-pointer(float, float);
+    callback stream-button(int, bool);
+    callback stream-wheel(float, float);
+    callback resume-capture();
+    callback apply-theme();
+
+    apply-theme => {
+        Palette.color-scheme = root.dark ? ColorScheme.dark : ColorScheme.light;
+    }
+    init => { root.apply-theme(); }
+
+    if !root.in-session: HorizontalLayout {
+        // Sidebar
+        Rectangle {
+            width: 216px;
+            background: Theme.sidebar;
+            VerticalLayout {
+                padding: 14px;
+                padding-top: 18px;
+                spacing: 4px;
+                HorizontalLayout {
+                    padding-left: 8px;
+                    padding-bottom: 18px;
+                    spacing: 10px;
+                    Rectangle {
+                        width: 26px;
+                        height: 26px;
+                        border-radius: 7px;
+                        background: Theme.accent;
+                        Path {
+                            width: 14px;
+                            height: 14px;
+                            commands: "M7 5 L19 12 L7 19 Z";
+                            viewbox-width: 24;
+                            viewbox-height: 24;
+                            fill: Theme.on-accent;
+                        }
+                    }
+                    Text {
+                        text: "RustStream";
+                        color: Theme.text;
+                        font-size: Theme.font-l;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                }
+                NavItem {
+                    text: "Accueil";
+                    icon: Icons.home;
+                    selected: root.page == 0;
+                    clicked => { root.page = 0; }
+                }
+                NavItem {
+                    text: "Périphériques";
+                    icon: Icons.devices;
+                    selected: root.page == 1;
+                    clicked => { root.page = 1; }
+                }
+                NavItem {
+                    text: "Performances";
+                    icon: Icons.performance;
+                    selected: root.page == 2;
+                    clicked => { root.page = 2; }
+                }
+                NavItem {
+                    text: "Paramètres";
+                    icon: Icons.settings;
+                    selected: root.page == 3;
+                    clicked => { root.page = 3; }
+                }
+                Rectangle { vertical-stretch: 1; }
+                // Discreet network status.
+                HorizontalLayout {
+                    padding-left: 10px;
+                    spacing: 8px;
+                    accessible-role: text;
+                    accessible-label: root.hosting ? "Partage actif" : "Partage désactivé";
+                    StatusDot {
+                        tint: root.host-session-peer != "" ? Theme.warning : root.hosting ? Theme.success : Theme.text-faint;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    VerticalLayout {
+                        Text {
+                            text: root.host-session-peer != "" ? "Session en cours" : root.hosting ? "Partage actif" : "Partage désactivé";
+                            color: Theme.text-muted;
+                            font-size: Theme.font-s;
+                        }
+                        if root.hosting: Text {
+                            text: root.local-address;
+                            color: Theme.text-faint;
+                            font-size: Theme.font-xs;
+                        }
+                    }
+                }
+            }
+        }
+        Rectangle {
+            width: 1px;
+            background: Theme.border;
+        }
+        // Content
+        Rectangle {
+            horizontal-stretch: 1;
+            if root.page == 0: HomePage {
+                width: parent.width;
+                height: parent.height;
+                device-name: root.device-name;
+                fingerprint: root.fingerprint;
+                local-address: root.local-address;
+                hosting: root.hosting;
+                host-session-peer: root.host-session-peer;
+                computers: root.computers;
+                set-hosting(v) => { root.set-hosting(v); }
+                stop-host-session => { root.stop-host-session(); }
+                connect(id) => { root.connect(id); }
+                remove-computer(id) => { root.remove-computer(id); }
+                open-add => { root.add-open = true; }
+            }
+            if root.page == 1: DevicesPage {
+                width: parent.width;
+                height: parent.height;
+            }
+            if root.page == 2: PerformancePage {
+                width: parent.width;
+                height: parent.height;
+                profile <=> root.profile;
+                advanced <=> root.advanced;
+                adv-fps <=> root.adv-fps;
+                adv-bitrate <=> root.adv-bitrate;
+                gpus: root.gpus;
+                encoder-text: root.encoder-text;
+                stats: root.stats;
+                stats-title: root.stats-title;
+                set-profile(p) => { root.set-profile(p); }
+                set-advanced(a, f, b) => { root.set-advanced(a, f, b); }
+            }
+            if root.page == 3: SettingsPage {
+                width: parent.width;
+                height: parent.height;
+                hosting: root.hosting;
+                allow-pairing: root.allow-pairing;
+                port: root.port;
+                trusted: root.trusted;
+                device-name: root.device-name;
+                fingerprint-full: root.fingerprint-full;
+                dark: root.dark;
+                animations: root.animations;
+                set-hosting(v) => { root.set-hosting(v); }
+                set-allow-pairing(v) => { root.set-allow-pairing(v); }
+                revoke(id) => { root.revoke(id); }
+                rename-device(n) => { root.rename-device(n); }
+                set-dark(v) => { root.set-dark(v); }
+                set-animations(v) => { root.set-animations(v); }
+            }
+        }
+    }
+
+    if root.in-session: SessionView {
+        width: parent.width;
+        height: parent.height;
+        frame: root.frame;
+        stream-width: root.stream-width;
+        stream-height: root.stream-height;
+        session-title: root.session-title;
+        stats: root.stats;
+        remote-displays: root.remote-displays;
+        remote-display: root.remote-display;
+        fullscreen: root.fullscreen;
+        capture-paused: root.capture-paused;
+        show-stats <=> root.show-stats;
+        waiting: root.waiting-frame;
+        disconnect => { root.disconnect(); }
+        toggle-fullscreen => { root.toggle-fullscreen(); }
+        select-display(i) => { root.select-display(i); }
+        pointer(x, y) => { root.stream-pointer(x, y); }
+        button(b, d) => { root.stream-button(b, d); }
+        wheel(dx, dy) => { root.stream-wheel(dx, dy); }
+        resume-capture => { root.resume-capture(); }
+    }
+
+    // Error banner.
+    if root.error-text != "": Rectangle {
+        y: root.height - self.height - 16px;
+        x: (root.width - self.width) / 2;
+        width: min(560px, root.width - 32px);
+        height: err-layout.preferred-height;
+        background: Theme.surface;
+        border-radius: Theme.radius-m;
+        border-width: 1px;
+        border-color: Theme.danger;
+        drop-shadow-blur: 16px;
+        drop-shadow-color: #00000044;
+        accessible-role: text;
+        accessible-label: root.error-text;
+        err-layout := HorizontalLayout {
+            padding: 10px;
+            padding-left: 16px;
+            spacing: 12px;
+            StatusDot { tint: Theme.danger; y: (parent.height - self.height) / 2; }
+            Text {
+                text: root.error-text;
+                color: Theme.text;
+                font-size: Theme.font-s;
+                wrap: word-wrap;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Button {
+                icon: Icons.close;
+                label: "Fermer";
+                quiet: true;
+                clicked => { root.dismiss-error(); }
+            }
+        }
+    }
+
+    if root.add-open: Dialog {
+        title: "Ajouter un ordinateur";
+        Text {
+            text: "Saisissez l'adresse IP ou le nom de l'ordinateur sur lequel « Partager » est activé.";
+            color: Theme.text-muted;
+            font-size: Theme.font-s;
+            wrap: word-wrap;
+        }
+        address := LineEdit {
+            placeholder-text: "ex. 192.168.1.20";
+            accessible-label: "Adresse de l'ordinateur";
+            accepted(text) => {
+                root.add-open = false;
+                root.add-computer(text);
+            }
+            init => { self.focus(); }
+        }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button {
+                text: "Annuler";
+                clicked => { root.add-open = false; }
+            }
+            Button {
+                text: "Se connecter";
+                primary: true;
+                enabled: address.text != "";
+                clicked => {
+                    root.add-open = false;
+                    root.add-computer(address.text);
+                }
+            }
+        }
+    }
+
+    if root.connecting && root.client-code == "": Dialog {
+        title: root.connecting-text;
+        HorizontalLayout {
+            spacing: 12px;
+            Spinner {
+                indeterminate: true;
+                width: 22px;
+                height: 22px;
+            }
+            Text {
+                text: "Établissement d'une connexion chiffrée…";
+                color: Theme.text-muted;
+                font-size: Theme.font-s;
+                vertical-alignment: center;
+            }
+        }
+        HorizontalLayout {
+            alignment: end;
+            Button {
+                text: "Annuler";
+                clicked => { root.cancel-connect(); }
+            }
+        }
+    }
+
+    if root.client-code != "": Dialog {
+        title: "Vérifiez le code";
+        Text {
+            text: "L'ordinateur distant affiche un code. Il doit être identique à celui-ci ; autorisez ensuite la connexion sur l'ordinateur distant.";
+            color: Theme.text-muted;
+            font-size: Theme.font-s;
+            wrap: word-wrap;
+        }
+        Text {
+            text: root.client-code;
+            color: Theme.text;
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            horizontal-alignment: center;
+            accessible-role: text;
+            accessible-label: "Code de vérification " + root.client-code;
+        }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button {
+                text: "Les codes diffèrent";
+                clicked => { root.confirm-pairing(false); }
+            }
+            Button {
+                text: "Les codes sont identiques";
+                primary: true;
+                clicked => { root.confirm-pairing(true); }
+            }
+        }
+    }
+
+    if root.host-request-code != "": Dialog {
+        title: "Nouvelle demande de connexion";
+        Text {
+            text: "« " + root.host-request-name + " » souhaite se connecter et contrôler cet ordinateur.";
+            color: Theme.text;
+            font-size: Theme.font-m;
+            wrap: word-wrap;
+        }
+        Text {
+            text: root.host-request-code;
+            color: Theme.text;
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            horizontal-alignment: center;
+            accessible-role: text;
+            accessible-label: "Code de vérification " + root.host-request-code;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Icon { data: Icons.shield; color: Theme.warning; size: 16px; }
+            Text {
+                text: "N'autorisez que si l'autre appareil affiche ce même code.";
+                color: Theme.text-muted;
+                font-size: Theme.font-s;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+        }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button {
+                text: "Refuser";
+                clicked => { root.answer-pairing(false); }
+            }
+            Button {
+                text: "Autoriser";
+                primary: true;
+                clicked => { root.answer-pairing(true); }
+            }
+        }
+    }
+}

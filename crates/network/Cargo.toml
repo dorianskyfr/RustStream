@@ -1,0 +1,24 @@
+[package]
+name = "ruststream-network"
+description = "QUIC transport (Quinn), stream framing, video datagrams and LAN discovery for RustStream"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bytes.workspace = true
+postcard.workspace = true
+quinn.workspace = true
+rustls.workspace = true
+ruststream-protocol.workspace = true
+ruststream-security.workspace = true
+serde.workspace = true
+socket2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

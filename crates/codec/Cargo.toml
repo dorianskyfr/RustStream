@@ -1,0 +1,15 @@
+[package]
+name = "ruststream-codec"
+description = "Video encoding/decoding backends and pixel conversion for RustStream"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+openh264.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

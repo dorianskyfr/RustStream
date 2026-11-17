@@ -1,0 +1,401 @@
+import { Theme } from "theme.slint";
+
+export component Icon inherits Path {
+    in property <string> data;
+    in property <color> color: Theme.text;
+    in property <length> size: 18px;
+    width: self.size;
+    height: self.size;
+    commands: self.data;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    stroke: self.color;
+    stroke-width: 1.7px;
+    fill: transparent;
+    accessible-role: none;
+}
+
+// Keyboard-accessible button: Tab to focus, Enter/Space to activate.
+export component Button {
+    in property <string> text;
+    in property <string> icon;
+    in property <bool> primary;
+    in property <bool> danger;
+    in property <bool> quiet;
+    in property <bool> enabled: true;
+    // Accessible name for icon-only buttons.
+    in property <string> label;
+    callback clicked;
+
+    min-height: 34px;
+    horizontal-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.text != "" ? root.text : root.label;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if (root.enabled) { root.clicked(); } }
+    forward-focus: fs;
+
+    private property <color> base: root.primary ? Theme.accent
+        : root.danger ? Theme.danger
+        : root.quiet ? transparent : Theme.surface-2;
+    private property <color> hover: root.primary ? Theme.accent-hover
+        : root.danger ? Theme.danger.brighter(10%)
+        : Theme.surface-hover;
+    private property <color> fg: (root.primary || root.danger) ? Theme.on-accent : Theme.text;
+
+    bg := Rectangle {
+        border-radius: Theme.radius-s;
+        background: !root.enabled ? Theme.surface-2 : ta.pressed ? root.hover.darker(8%) : ta.has-hover ? root.hover : root.base;
+        border-width: fs.has-focus ? 2px : (root.primary || root.danger || root.quiet) ? 0px : 1px;
+        border-color: fs.has-focus ? Theme.focus : Theme.border;
+        opacity: root.enabled ? 1 : 0.5;
+        animate background { duration: Theme.fast; }
+
+        HorizontalLayout {
+            padding-left: root.text == "" ? 8px : 14px;
+            padding-right: root.text == "" ? 8px : 14px;
+            spacing: 8px;
+            alignment: center;
+            if root.icon != "": Icon {
+                data: root.icon;
+                color: root.fg;
+                size: 16px;
+                y: (parent.height - self.height) / 2;
+            }
+            if root.text != "": Text {
+                text: root.text;
+                color: root.fg;
+                font-size: Theme.font-m;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+        }
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { fs.focus(); root.clicked(); }
+    }
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+export component Card inherits Rectangle {
+    in property <bool> highlighted;
+    background: Theme.surface;
+    border-radius: Theme.radius-m;
+    border-width: 1px;
+    border-color: self.highlighted ? Theme.accent : Theme.border;
+}
+
+export component NavItem {
+    in property <string> text;
+    in property <string> icon;
+    in property <bool> selected;
+    callback clicked;
+
+    height: 36px;
+    accessible-role: tab;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: fs;
+
+    Rectangle {
+        border-radius: Theme.radius-s;
+        background: root.selected ? Theme.surface-2 : ta.has-hover ? Theme.surface-hover : transparent;
+        border-width: fs.has-focus ? 2px : 0px;
+        border-color: Theme.focus;
+        animate background { duration: Theme.fast; }
+        HorizontalLayout {
+            padding-left: 10px;
+            spacing: 10px;
+            Icon {
+                data: root.icon;
+                color: root.selected ? Theme.accent : Theme.text-muted;
+                size: 18px;
+                y: (parent.height - self.height) / 2;
+            }
+            Text {
+                text: root.text;
+                color: root.selected ? Theme.text : Theme.text-muted;
+                font-size: Theme.font-m;
+                font-weight: root.selected ? 600 : 500;
+                vertical-alignment: center;
+            }
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+export component StatusDot inherits Rectangle {
+    in property <color> tint: Theme.success;
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: self.tint;
+}
+
+export component Pill inherits Rectangle {
+    in property <string> text;
+    in property <color> tint: Theme.text-muted;
+    height: 22px;
+    horizontal-stretch: 0;
+    border-radius: 11px;
+    background: self.tint.with-alpha(0.14);
+    HorizontalLayout {
+        padding-left: 9px;
+        padding-right: 9px;
+        spacing: 6px;
+        StatusDot {
+            tint: root.tint;
+            y: (parent.height - self.height) / 2;
+        }
+        Text {
+            text: root.text;
+            color: root.tint;
+            font-size: Theme.font-xs;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component PageHeader {
+    in property <string> title;
+    in property <string> subtitle;
+    VerticalLayout {
+        spacing: 4px;
+        Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: Theme.font-xxl;
+            font-weight: 700;
+            accessible-role: text;
+        }
+        if root.subtitle != "": Text {
+            text: root.subtitle;
+            color: Theme.text-muted;
+            font-size: Theme.font-m;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component SectionTitle inherits Text {
+    color: Theme.text-faint;
+    font-size: Theme.font-xs;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+
+// A labelled row inside a settings card; the control goes in @children.
+export component SettingRow {
+    in property <string> title;
+    in property <string> description;
+    min-height: 56px;
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        spacing: 16px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: Theme.font-m;
+                font-weight: 600;
+            }
+            if root.description != "": Text {
+                text: root.description;
+                color: Theme.text-muted;
+                font-size: Theme.font-s;
+                wrap: word-wrap;
+            }
+        }
+        HorizontalLayout {
+            alignment: end;
+            horizontal-stretch: 0;
+            @children
+        }
+    }
+}
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.border;
+}
+
+// Keyboard-accessible on/off switch.
+export component Toggle {
+    in-out property <bool> checked;
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+
+    width: 40px;
+    height: 22px;
+    accessible-role: switch;
+    accessible-label: root.label;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.flip(); }
+    forward-focus: fs;
+
+    function flip() {
+        if (root.enabled) {
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
+    }
+
+    Rectangle {
+        border-radius: self.height / 2;
+        background: root.checked ? Theme.accent : Theme.surface-2;
+        border-width: fs.has-focus ? 2px : 1px;
+        border-color: fs.has-focus ? Theme.focus : root.checked ? Theme.accent : Theme.border;
+        opacity: root.enabled ? 1 : 0.5;
+        animate background { duration: Theme.fast; }
+        knob := Rectangle {
+            width: 16px;
+            height: 16px;
+            y: 3px;
+            x: root.checked ? parent.width - self.width - 3px : 3px;
+            border-radius: 8px;
+            background: root.checked ? Theme.on-accent : Theme.text-muted;
+            animate x { duration: Theme.fast; easing: ease-out; }
+        }
+    }
+    TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { fs.focus(); root.flip(); }
+    }
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.flip();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+// Selectable option card (profiles).
+export component OptionCard {
+    in property <string> title;
+    in property <string> description;
+    in property <string> icon;
+    in property <bool> selected;
+    callback clicked;
+
+    min-height: 96px;
+    horizontal-stretch: 1;
+    accessible-role: radio-button;
+    accessible-label: root.title;
+    accessible-checkable: true;
+    accessible-checked: root.selected;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: fs;
+
+    Rectangle {
+        background: root.selected ? Theme.accent-soft : ta.has-hover ? Theme.surface-hover : Theme.surface;
+        border-radius: Theme.radius-m;
+        border-width: fs.has-focus || root.selected ? 2px : 1px;
+        border-color: fs.has-focus ? Theme.focus : root.selected ? Theme.accent : Theme.border;
+        animate background { duration: Theme.fast; }
+        VerticalLayout {
+            padding: 14px;
+            spacing: 6px;
+            Icon {
+                data: root.icon;
+                color: root.selected ? Theme.accent : Theme.text-muted;
+            }
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: Theme.font-m;
+                font-weight: 600;
+            }
+            Text {
+                text: root.description;
+                color: Theme.text-muted;
+                font-size: Theme.font-s;
+                wrap: word-wrap;
+                vertical-stretch: 1;
+            }
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { fs.focus(); root.clicked(); }
+    }
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+// Centered modal dialog over a scrim.
+export component Dialog inherits Rectangle {
+    in property <string> title;
+    in property <length> dialog-width: 420px;
+    background: Theme.scrim;
+    // Swallow clicks behind the dialog.
+    TouchArea { }
+    Rectangle {
+        width: min(root.dialog-width, root.width - 32px);
+        height: content.preferred-height;
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        background: Theme.surface;
+        border-radius: Theme.radius-l;
+        border-width: 1px;
+        border-color: Theme.border;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: #00000055;
+        content := VerticalLayout {
+            padding: 22px;
+            spacing: 14px;
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: Theme.font-l;
+                font-weight: 700;
+                wrap: word-wrap;
+            }
+            @children
+        }
+    }
+}

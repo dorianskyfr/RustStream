@@ -1,0 +1,25 @@
+[package]
+name = "ruststream-cli"
+description = "RustStream command line: headless host, benchmarks and diagnostics"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ruststream-cli"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+ruststream-capture.workspace = true
+ruststream-codec.workspace = true
+ruststream-core.workspace = true
+ruststream-telemetry.workspace = true
+tokio = { workspace = true, features = ["signal"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
