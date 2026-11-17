@@ -9,21 +9,26 @@
 //!   authentication. TLS proves possession of the private key; the
 //!   application then authorises the fingerprint against the [`TrustStore`].
 //! * Unknown devices must be **paired**: both screens show the same 6-digit
-//!   code derived from both fingerprints ([`sas_code`]) and the host user
-//!   approves. A man-in-the-middle necessarily changes at least one
-//!   fingerprint, so the codes differ.
+//!   code derived from both fingerprints and fresh nonces exchanged with a
+//!   commit–reveal protocol ([`sas_code`], see `pairing.rs`); both users
+//!   confirm. A man-in-the-middle cannot choose the codes, so they differ
+//!   except with probability 10⁻⁶ per (rate-limited) attempt.
 //! * The private key is stored encrypted by a [`SecretProtector`] (DPAPI on
 //!   Windows, see `ruststream-platform-windows`).
 
 mod fingerprint;
 mod identity;
 mod limiter;
+mod pairing;
 mod tls;
 mod trust;
 
-pub use fingerprint::{Fingerprint, sas_code};
+pub use fingerprint::Fingerprint;
 pub use identity::{DeviceIdentity, PlaintextProtector, SecretProtector};
 pub use limiter::AttemptLimiter;
+pub use pairing::{
+    Commitment, NONCE_LEN, Nonce, commitment, random_nonce, sas_code, verify_commitment,
+};
 pub use tls::{
     SERVER_NAME, ServerPolicy, client_config, crypto_provider, peer_fingerprint, server_config,
 };

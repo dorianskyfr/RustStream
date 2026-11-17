@@ -24,7 +24,9 @@ use ruststream_protocol::{
     ControlMessage, DisplayInfo, Hello, InputEvent, PROTOCOL_VERSION, RejectReason, SessionParams,
     VideoCodec,
 };
-use ruststream_security::{AttemptLimiter, DeviceIdentity, Fingerprint, TrustStore, sas_code};
+use ruststream_security::{
+    AttemptLimiter, DeviceIdentity, Fingerprint, TrustStore, commitment, random_nonce, sas_code,
+};
 use ruststream_telemetry::{RateMeter, Summary, Window};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::timeout;
@@ -216,6 +218,9 @@ async fn accept_loop(shared: Arc<Shared>, endpoint: Endpoint, mut shutdown: watc
     loop {
         tokio::select! {
             _ = shutdown.changed() => break,
+            // Reap finished connection tasks so a long-running host does not
+            // accumulate completed entries.
+            Some(_) = sessions.join_next(), if !sessions.is_empty() => {}
             incoming = endpoint.accept() => {
                 let Some(incoming) = incoming else { break };
                 let ip = incoming.remote_address().ip();
@@ -317,12 +322,36 @@ async fn serve(
             shared.record_failure(remote.ip());
             return Err(reject(&conn, &mut send, RejectReason::PairingDisabled).await);
         }
-        send_msg(&mut send, &ControlMessage::PairingRequired).await?;
+        // Commit–reveal: commit to our nonce before seeing the client's.
+        let host_fp = shared.identity.fingerprint();
+        let host_nonce = random_nonce()?;
+        send_msg(
+            &mut send,
+            &ControlMessage::PairingRequired {
+                commitment: commitment(&host_fp, &host_nonce),
+            },
+        )
+        .await?;
+        let client_nonce = match timeout(HANDSHAKE_TIMEOUT * 3, recv_msg(&mut recv, &mut scratch))
+            .await
+            .map_err(|_| CoreError::Timeout("pairing nonce"))??
+        {
+            Some(ControlMessage::PairingNonce { nonce }) => nonce,
+            _ => {
+                shared.record_failure(remote.ip());
+                return Err(reject(&conn, &mut send, RejectReason::InvalidRequest).await);
+            }
+        };
+        send_msg(
+            &mut send,
+            &ControlMessage::PairingReveal { nonce: host_nonce },
+        )
+        .await?;
         let (tx, rx) = oneshot::channel();
         shared.emit(HostEvent::PairingRequest(PairingRequest {
             peer_name: hello.device_name.clone(),
             fingerprint: fp,
-            code: sas_code(&shared.identity.fingerprint(), &fp),
+            code: sas_code(&fp, &host_fp, &client_nonce, &host_nonce),
             address: remote,
             responder: tx,
         }));
@@ -422,23 +451,58 @@ fn open_source(kind: &SourceKind, display: u32, fps: u16) -> Result<OpenedSource
     }
 }
 
-fn make_injector(mode: InputMode, display: Option<&DisplayDesc>) -> Injector {
-    let backend: Box<dyn InjectBackend> = match (mode, display) {
+/// Geometry of the streamed display used by input injection, updated when
+/// the host display mode changes during a session.
+#[cfg(windows)]
+type Geometry = Option<ruststream_input::windows::SharedDisplayRect>;
+#[cfg(not(windows))]
+type Geometry = Option<()>;
+
+#[cfg(windows)]
+fn rect_of(d: &DisplayDesc) -> ruststream_input::windows::DisplayRect {
+    ruststream_input::windows::DisplayRect {
+        left: d.left,
+        top: d.top,
+        width: d.width,
+        height: d.height,
+    }
+}
+
+fn make_injector(mode: InputMode, display: Option<&DisplayDesc>) -> (Injector, Geometry) {
+    match (mode, display) {
         #[cfg(windows)]
-        (InputMode::Inject, Some(d)) => Box::new(ruststream_input::windows::SendInputBackend::new(
-            ruststream_input::windows::DisplayRect {
-                left: d.left,
-                top: d.top,
-                width: d.width,
-                height: d.height,
-            },
-        )),
+        (InputMode::Inject, Some(d)) => {
+            let geometry = Arc::new(Mutex::new(rect_of(d)));
+            let backend = ruststream_input::windows::SendInputBackend::shared(geometry.clone());
+            (Injector::new(Box::new(backend)), Some(geometry))
+        }
         _ => {
             let _ = display;
-            Box::new(NullBackend)
+            let backend: Box<dyn InjectBackend> = Box::new(NullBackend);
+            (Injector::new(backend), None)
         }
-    };
-    Injector::new(backend)
+    }
+}
+
+/// Re-reads the display layout after a mode change so absolute mouse
+/// coordinates keep mapping onto the right pixels.
+fn refresh_geometry(geometry: &Geometry, display_index: u32) {
+    #[cfg(windows)]
+    if let Some(g) = geometry.clone() {
+        tokio::task::spawn_blocking(move || match ruststream_capture::list_displays() {
+            Ok(list) => {
+                if let Some(d) = list.iter().find(|d| d.index == display_index)
+                    && let Ok(mut r) = g.lock()
+                {
+                    *r = rect_of(d);
+                    tracing::info!(?d, "input geometry updated after mode change");
+                }
+            }
+            Err(e) => tracing::warn!(error = %e, "cannot refresh display geometry"),
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (geometry, display_index);
 }
 
 enum VideoEvent {
@@ -549,7 +613,7 @@ async fn run_session(
         }
     });
     // Input.
-    let injector = make_injector(shared.cfg.input, opened.selected.as_ref());
+    let (injector, geometry) = make_injector(shared.cfg.input, opened.selected.as_ref());
     let input = tokio::spawn(input_loop(conn.clone(), injector));
     // Video.
     let stop = Arc::new(AtomicBool::new(false));
@@ -586,6 +650,7 @@ async fn run_session(
             },
             v = video_rx.recv() => match v {
                 Some(VideoEvent::Resized(p)) => {
+                    refresh_geometry(&geometry, p.display);
                     let _ = ctl_tx.send(ControlMessage::SessionChanged(p));
                 }
                 Some(VideoEvent::Stats { width, height, fps, bitrate_mbps, encode_us }) => {

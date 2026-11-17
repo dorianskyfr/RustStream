@@ -645,6 +645,7 @@ component SessionView inherits Rectangle {
     private property <float> sh: max(1, root.stream-height);
     private property <float> fit: min(root.width / 1px / sw, root.height / 1px / sh);
     private property <bool> toolbar-visible: root.waiting || root.capture-paused || bar-ta.has-hover
+        || top-ta.has-hover
         || (stream-ta.has-hover && stream-ta.mouse-y + img.y < 64px);
 
     img := Image {
@@ -684,6 +685,15 @@ component SessionView inherits Rectangle {
             root.wheel(e.delta-x / 1px, e.delta-y / 1px);
             accept
         }
+    }
+
+    // Hover target above a letterboxed image, so the toolbar can always be
+    // revealed by moving the pointer to the top edge.
+    top-ta := TouchArea {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: max(img.y, 0px);
     }
 
     if root.waiting: VerticalLayout {

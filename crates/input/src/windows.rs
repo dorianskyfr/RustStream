@@ -1,8 +1,8 @@
 //! Windows input: `SendInput` injection (host) and low-level keyboard
 //! capture (client).
 
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::{Arc, Mutex};
 
 use ::windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
 use ::windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -33,20 +33,32 @@ pub struct DisplayRect {
     pub height: u32,
 }
 
+/// Display geometry shared between the session (which updates it when the
+/// host resolution or layout changes) and the input backend.
+pub type SharedDisplayRect = Arc<Mutex<DisplayRect>>;
+
 /// Injects input with `SendInput`. Absolute coordinates are mapped onto the
 /// streamed display inside the virtual desktop.
 #[derive(Debug)]
 pub struct SendInputBackend {
-    display: DisplayRect,
+    display: SharedDisplayRect,
 }
 
 impl SendInputBackend {
     pub fn new(display: DisplayRect) -> Self {
+        Self::shared(Arc::new(Mutex::new(display)))
+    }
+
+    /// Uses a geometry that can be updated during the session.
+    pub fn shared(display: SharedDisplayRect) -> Self {
         Self { display }
     }
 
-    pub fn set_display(&mut self, display: DisplayRect) {
-        self.display = display;
+    fn display(&self) -> DisplayRect {
+        match self.display.lock() {
+            Ok(g) => *g,
+            Err(poisoned) => *poisoned.into_inner(),
+        }
     }
 
     /// Converts a normalised position on the display into the 0..=65535
@@ -61,7 +73,7 @@ impl SendInputBackend {
                 GetSystemMetrics(SM_CYVIRTUALSCREEN).max(2),
             )
         };
-        map_abs(self.display, (vx, vy, vw, vh), x, y)
+        map_abs(self.display(), (vx, vy, vw, vh), x, y)
     }
 }
 

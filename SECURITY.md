@@ -6,7 +6,7 @@
 |---|---|
 | Écoute du réseau | QUIC + TLS 1.3 sur tout le trafic (vidéo, entrées, contrôle) |
 | Connexion d'un appareil inconnu | Authentification mutuelle par certificat ; liste de confiance côté hôte ; appairage avec approbation explicite |
-| Homme du milieu à l'appairage | Code de 6 chiffres dérivé des deux empreintes (SAS), affiché sur les deux écrans ; **les deux utilisateurs doivent confirmer** |
+| Homme du milieu à l'appairage | Code de 6 chiffres (SAS) dérivé des deux empreintes **et de nombres aléatoires frais échangés par engagement/révélation**, affiché sur les deux écrans ; **les deux utilisateurs doivent confirmer**. Un attaquant ne peut pas choisir le code : 1 chance sur 1 000 000 par tentative, tentatives limitées |
 | Usurpation d'un hôte connu | Empreinte de l'hôte épinglée côté client : la poignée TLS échoue si le certificat change |
 | Faux hôte annoncé sur le LAN | Les balises de découverte ne sont pas authentifiées et ne servent que d'indice ; un hôte inconnu impose toujours l'appairage avec confirmation locale du code |
 | Force brute sur l'appairage | 5 échecs max par adresse IP et par minute ; délai d'approbation 60 s |
@@ -19,7 +19,7 @@
 
 - Chaque installation génère une paire de clés ECDSA P-256 et un certificat auto-signé. L'identité est l'empreinte SHA-256 du certificat ; aucune autorité de certification.
 - TLS vérifie la signature de la poignée de main (preuve de possession de la clé). La chaîne de certificats est remplacée par la vérification d'empreinte : épinglage côté client, liste de confiance côté hôte.
-- Appairage : le client indique `request_pairing` ; l'hôte affiche le nom de l'appareil et le code, l'utilisateur de l'hôte approuve ; l'utilisateur du client confirme que le code est identique. Aucune image n'est affichée ni aucune entrée envoyée avant les deux confirmations.
+- Appairage : le client indique `request_pairing`. L'hôte envoie un engagement `H(empreinte_hôte ‖ Nh)` sur un nombre aléatoire `Nh` ; le client répond avec son nombre `Nc` ; l'hôte révèle `Nh`, que le client vérifie. Le code vaut `H(empreinte_client ‖ empreinte_hôte ‖ Nc ‖ Nh) mod 10⁶`. Un code dérivé seulement des empreintes publiques (version initiale) pouvait être forcé hors ligne par un attaquant générant des certificats : corrigé suite à la revue Codex du 2026-11-17. L'hôte affiche le nom de l'appareil et le code, son utilisateur approuve ; l'utilisateur du client confirme que le code est identique. Aucune image n'est affichée ni aucune entrée envoyée avant les deux confirmations.
 - Révocation : Paramètres › Appareils autorisés › Révoquer (ou `ruststream-cli trusted --revoke`). La connexion suivante de cet appareil exige un nouvel appairage.
 
 ## Exposition réseau

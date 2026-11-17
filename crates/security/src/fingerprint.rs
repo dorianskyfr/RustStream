@@ -60,23 +60,6 @@ impl<'de> Deserialize<'de> for Fingerprint {
     }
 }
 
-/// Short authentication string shown on both devices during pairing.
-///
-/// It is symmetric (both sides compute the same value regardless of role)
-/// and changes if either certificate changes. Six decimal digits give a
-/// 1-in-a-million chance for an active attacker to match by luck on a single
-/// attempt; attempts are rate-limited by [`crate::AttemptLimiter`].
-pub fn sas_code(a: &Fingerprint, b: &Fingerprint) -> String {
-    let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
-    let mut h = Sha256::new();
-    h.update(b"RustStream pairing SAS v1");
-    h.update(lo.0);
-    h.update(hi.0);
-    let d = h.finalize();
-    let n = u32::from_be_bytes([d[0], d[1], d[2], d[3]]) % 1_000_000;
-    format!("{:03} {:03}", n / 1000, n % 1000)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,22 +70,6 @@ mod tests {
         assert_eq!(Fingerprint::from_hex(&fp.to_hex()), Some(fp));
         assert_eq!(fp.short().len(), 19);
         assert!(Fingerprint::from_hex("00").is_none());
-    }
-
-    #[test]
-    fn sas_is_symmetric_and_sensitive() {
-        let a = Fingerprint::of_certificate(b"a");
-        let b = Fingerprint::of_certificate(b"b");
-        let c = Fingerprint::of_certificate(b"c");
-        assert_eq!(sas_code(&a, &b), sas_code(&b, &a));
-        assert_ne!(sas_code(&a, &b), sas_code(&a, &c));
-        let code = sas_code(&a, &b);
-        assert_eq!(code.len(), 7);
-        assert!(
-            code.chars()
-                .filter(|c| *c != ' ')
-                .all(|c| c.is_ascii_digit())
-        );
     }
 
     #[test]

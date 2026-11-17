@@ -205,14 +205,25 @@ fn trusted(mut args: Args) -> Result<()> {
     Ok(())
 }
 
-async fn read_line() -> String {
-    tokio::task::spawn_blocking(|| {
+/// Terminal lines (trimmed, lowercase) delivered through a channel, so that
+/// waiting for an answer never blocks event handling or Ctrl+C.
+fn stdin_lines() -> mpsc::UnboundedReceiver<String> {
+    let (tx, rx) = mpsc::unbounded_channel();
+    std::thread::spawn(move || {
         let mut s = String::new();
-        let _ = std::io::stdin().read_line(&mut s);
-        s.trim().to_lowercase()
-    })
-    .await
-    .unwrap_or_default()
+        loop {
+            s.clear();
+            match std::io::stdin().read_line(&mut s) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    if tx.send(s.trim().to_lowercase()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    rx
 }
 
 async fn host_cmd(mut args: Args) -> Result<()> {
@@ -248,17 +259,36 @@ async fn host_cmd(mut args: Args) -> Result<()> {
         ctx.identity.fingerprint()
     );
     println!("Press Ctrl+C to stop.");
+    let mut stdin = stdin_lines();
+    let mut pending: Option<host::PairingRequest> = None;
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => break,
+            Some(line) = stdin.recv() => {
+                if let Some(req) = pending.take() {
+                    let accept = line == "y";
+                    println!("{}", if accept { "Accepted." } else { "Refused." });
+                    req.respond(accept);
+                }
+            }
             ev = rx.recv() => match ev {
                 Some(HostEvent::PairingRequest(req)) => {
+                    if pending.is_some() {
+                        // One request at a time; the other device can retry.
+                        req.respond(false);
+                        continue;
+                    }
                     println!(
                         "\nPairing request from '{}' ({}) — code {}\nDoes the other device show the same code? Accept? [y/N]",
                         req.peer_name, req.address, req.code
                     );
-                    let accept = read_line().await == "y";
-                    req.respond(accept);
+                    pending = Some(req);
+                }
+                Some(HostEvent::PairingCancelled { fingerprint }) => {
+                    if pending.as_ref().is_some_and(|p| p.fingerprint == fingerprint) {
+                        pending = None;
+                        println!("Pairing request expired or cancelled by the other device.");
+                    }
                 }
                 Some(HostEvent::SessionStarted { peer_name, params, encoder, .. }) => {
                     println!("Session started with '{peer_name}': {}x{} @ {} fps, {} kbps, {encoder}",
@@ -313,26 +343,34 @@ async fn connect_cmd(mut args: Args) -> Result<()> {
             f.fetch_add(1, Ordering::Relaxed);
         }),
     );
-    let deadline =
-        (seconds > 0).then(|| tokio::time::Instant::now() + Duration::from_secs(seconds));
+    // Without --seconds, run until Ctrl+C.
+    let deadline = tokio::time::Instant::now()
+        + if seconds > 0 {
+            Duration::from_secs(seconds)
+        } else {
+            Duration::from_secs(60 * 60 * 24 * 365)
+        };
+    let mut stdin = stdin_lines();
+    let mut awaiting_answer = false;
     loop {
-        let ev = match deadline {
-            Some(d) => tokio::select! {
-                e = rx.recv() => e,
-                _ = tokio::time::sleep_until(d) => { handle.disconnect(); rx.recv().await }
-            },
-            None => tokio::select! {
-                e = rx.recv() => e,
-                _ = tokio::signal::ctrl_c() => { handle.disconnect(); rx.recv().await }
-            },
+        let ev = tokio::select! {
+            e = rx.recv() => e,
+            _ = tokio::time::sleep_until(deadline) => { handle.disconnect(); rx.recv().await }
+            _ = tokio::signal::ctrl_c() => { handle.disconnect(); rx.recv().await }
+            Some(line) = stdin.recv() => {
+                if awaiting_answer {
+                    awaiting_answer = false;
+                    handle.confirm_pairing(line == "y");
+                }
+                continue;
+            }
         };
         match ev {
             Some(ClientEvent::PairingCode(code)) => {
                 println!(
                     "Pairing code: {code}\nDoes the host show exactly the same code? [y/N] (then approve on the host)"
                 );
-                let same = read_line().await == "y";
-                handle.confirm_pairing(same);
+                awaiting_answer = true;
             }
             Some(ClientEvent::Connected {
                 host_name,

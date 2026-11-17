@@ -19,7 +19,10 @@ use ruststream_protocol::video::{FrameMeta, Reassembler};
 use ruststream_protocol::{
     ControlMessage, DisplayInfo, Hello, InputEvent, RejectReason, SessionParams, StreamRequest,
 };
-use ruststream_security::{DeviceIdentity, Fingerprint, ServerPolicy, sas_code};
+use ruststream_security::{
+    Commitment, DeviceIdentity, Fingerprint, Nonce, ServerPolicy, random_nonce, sas_code,
+    verify_commitment,
+};
 use ruststream_telemetry::{RateMeter, SessionStats, Window};
 use tokio::sync::mpsc;
 use tokio::time::timeout;
@@ -217,6 +220,7 @@ async fn session(
     // nothing is displayed or sent before that.
     let mut code_shown = false;
     let mut confirmed = !pairing_mode;
+    let mut pairing: Option<(Commitment, Nonce)> = None;
     let mut welcome: Option<(String, SessionParams, Vec<DisplayInfo>)> = None;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(150);
     let handshake: Result<(String, SessionParams, Vec<DisplayInfo>)> = loop {
@@ -225,9 +229,27 @@ async fn session(
         }
         tokio::select! {
             m = in_rx.recv() => match m {
-                Some(ControlMessage::PairingRequired) => {
+                Some(ControlMessage::PairingRequired { commitment }) => {
+                    if pairing.is_some() {
+                        break Err(CoreError::Unexpected("repeated pairing request"));
+                    }
+                    let nonce = random_nonce()?;
+                    pairing = Some((commitment, nonce));
+                    if let Err(e) = send_msg(&mut send, &ControlMessage::PairingNonce { nonce }).await {
+                        break Err(e.into());
+                    }
+                }
+                Some(ControlMessage::PairingReveal { nonce: host_nonce }) => {
+                    let Some((commitment, client_nonce)) = pairing else {
+                        break Err(CoreError::Unexpected("pairing reveal without commitment"));
+                    };
+                    if code_shown || !verify_commitment(&commitment, &host_fp, &host_nonce) {
+                        break Err(CoreError::Unexpected(
+                            "the host's pairing data is inconsistent (possible attack)",
+                        ));
+                    }
                     code_shown = true;
-                    let code = sas_code(&identity.fingerprint(), &host_fp);
+                    let code = sas_code(&identity.fingerprint(), &host_fp, &client_nonce, &host_nonce);
                     let _ = events.send(ClientEvent::PairingCode(code));
                 }
                 Some(ControlMessage::Welcome { host_name, session, displays }) => {
@@ -390,6 +412,12 @@ async fn session(
                 }
             },
             _ = tick.tick() => {
+                // Recovery must not depend on incoming video: if the keyframe
+                // itself was lost and the host screen is static, nothing else
+                // would ever arrive.
+                if awaiting_key {
+                    request_key(&mut last_key_request, &ctl_tx);
+                }
                 let now = Instant::now();
                 let link = transport::link_stats(&conn);
                 let reasm_stats = reasm.stats();

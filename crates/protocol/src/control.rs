@@ -6,8 +6,10 @@
 //! client                                   host
 //!   | --- QUIC + TLS 1.3, mutual certs ---> |
 //!   | -- Hello ----------------------------> |  host checks the client fingerprint
-//!   | <------------------- PairingRequired - |  (only if the client is unknown)
-//!   |       both sides show the same 6-digit code; host user approves
+//!   | <------- PairingRequired{commitment} - |  (unknown client, or client asks)
+//!   | -- PairingNonce{Nc} -----------------> |
+//!   | <-------------- PairingReveal{Nh} ---- |  client checks the commitment
+//!   |   both show the same 6-digit code; both users confirm
 //!   | <---------------------------- Welcome |  or Rejected
 //!   | <======== video datagrams ============ |
 //!   | ========= input stream =============> |
@@ -122,10 +124,20 @@ impl std::fmt::Display for RejectReason {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlMessage {
     Hello(Hello),
-    /// The host does not know this client. Both sides display the
-    /// short authentication string derived from the two certificate
-    /// fingerprints; the host user must approve.
-    PairingRequired,
+    /// Host → client: pairing ceremony starts. Carries the host's commitment
+    /// to its random nonce (commit–reveal; see `ruststream-security`).
+    PairingRequired {
+        commitment: [u8; 32],
+    },
+    /// Client → host: the client's random pairing nonce.
+    PairingNonce {
+        nonce: [u8; 32],
+    },
+    /// Host → client: the host nonce, which must match the commitment. Both
+    /// sides then display the same 6-digit code; both users must confirm.
+    PairingReveal {
+        nonce: [u8; 32],
+    },
     Welcome {
         host_name: String,
         session: SessionParams,
