@@ -9,7 +9,7 @@
 //!   key and button.
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -67,6 +67,8 @@ pub struct HostConfig {
 /// [`PairingRequest::respond`]. Dropping it denies the request.
 #[derive(Debug)]
 pub struct PairingRequest {
+    /// Unique per request; matches [`HostEvent::PairingCancelled::id`].
+    pub id: u64,
     pub peer_name: String,
     pub fingerprint: Fingerprint,
     pub code: String,
@@ -97,6 +99,7 @@ pub enum HostEvent {
     PairingRequest(PairingRequest),
     /// The pairing request for this device expired or the client left.
     PairingCancelled {
+        id: u64,
         fingerprint: Fingerprint,
     },
     Paired {
@@ -167,6 +170,7 @@ struct Shared {
     limiter: Mutex<AttemptLimiter>,
     busy: AtomicBool,
     allow_pairing: AtomicBool,
+    next_pairing_id: AtomicU64,
     /// Connection of the active session (for "end session").
     active: Mutex<Option<Connection>>,
 }
@@ -194,6 +198,7 @@ pub async fn start(
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let shared = Arc::new(Shared {
         allow_pairing: AtomicBool::new(cfg.allow_pairing),
+        next_pairing_id: AtomicU64::new(1),
         cfg,
         identity: ctx.identity.clone(),
         trust: ctx.trusted_clients.clone(),
@@ -348,7 +353,9 @@ async fn serve(
         )
         .await?;
         let (tx, rx) = oneshot::channel();
+        let id = shared.next_pairing_id.fetch_add(1, Ordering::Relaxed);
         shared.emit(HostEvent::PairingRequest(PairingRequest {
+            id,
             peer_name: hello.device_name.clone(),
             fingerprint: fp,
             code: sas_code(&fp, &host_fp, &client_nonce, &host_nonce),
@@ -360,7 +367,10 @@ async fn serve(
             _ = conn.closed() => false,
         };
         if !accepted {
-            shared.emit(HostEvent::PairingCancelled { fingerprint: fp });
+            shared.emit(HostEvent::PairingCancelled {
+                id,
+                fingerprint: fp,
+            });
             shared.record_failure(remote.ip());
             return Err(reject(&conn, &mut send, RejectReason::PairingDenied).await);
         }

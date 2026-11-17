@@ -28,7 +28,7 @@ Dépendances unidirectionnelles : `protocol`, `security` et `telemetry` sont por
 
 ## Transport
 
-Une connexion QUIC (TLS 1.3, ALPN `ruststream/1`, port UDP 47800 par défaut) porte trois canaux séparés par exigence de livraison :
+Une connexion QUIC (TLS 1.3, ALPN `ruststream/2`, port UDP 47800 par défaut) porte trois canaux séparés par exigence de livraison :
 
 | Canal | Mécanisme QUIC | Contenu |
 |---|---|---|

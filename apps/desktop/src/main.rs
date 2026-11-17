@@ -483,12 +483,8 @@ impl App {
                 self.ui.window().request_redraw();
                 self.pairing = Some(req);
             }
-            HostEvent::PairingCancelled { fingerprint } => {
-                if self
-                    .pairing
-                    .as_ref()
-                    .is_some_and(|p| p.fingerprint == fingerprint)
-                {
+            HostEvent::PairingCancelled { id, .. } => {
+                if self.pairing.as_ref().is_some_and(|p| p.id == id) {
                     self.pairing = None;
                     self.ui.set_host_request_code(s(""));
                 }

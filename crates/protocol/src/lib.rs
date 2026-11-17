@@ -25,11 +25,11 @@ pub use control::*;
 pub use input::*;
 
 /// Wire protocol version. Bump on any incompatible change to messages or framing.
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
 
 /// QUIC ALPN identifier. Includes the major protocol version so incompatible
 /// peers fail during the TLS handshake instead of mid-session.
-pub const ALPN: &[u8] = b"ruststream/1";
+pub const ALPN: &[u8] = b"ruststream/2";
 
 /// Default UDP port of the host QUIC endpoint.
 pub const DEFAULT_PORT: u16 = 47800;

@@ -264,7 +264,9 @@ async fn host_cmd(mut args: Args) -> Result<()> {
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => break,
-            Some(line) = stdin.recv() => {
+            // Read stdin only while a prompt is pending, so early answers
+            // (e.g. piped input) wait in the channel instead of being lost.
+            Some(line) = stdin.recv(), if pending.is_some() => {
                 if let Some(req) = pending.take() {
                     let accept = line == "y";
                     println!("{}", if accept { "Accepted." } else { "Refused." });
@@ -284,8 +286,8 @@ async fn host_cmd(mut args: Args) -> Result<()> {
                     );
                     pending = Some(req);
                 }
-                Some(HostEvent::PairingCancelled { fingerprint }) => {
-                    if pending.as_ref().is_some_and(|p| p.fingerprint == fingerprint) {
+                Some(HostEvent::PairingCancelled { id, .. }) => {
+                    if pending.as_ref().is_some_and(|p| p.id == id) {
                         pending = None;
                         println!("Pairing request expired or cancelled by the other device.");
                     }
@@ -357,11 +359,9 @@ async fn connect_cmd(mut args: Args) -> Result<()> {
             e = rx.recv() => e,
             _ = tokio::time::sleep_until(deadline) => { handle.disconnect(); rx.recv().await }
             _ = tokio::signal::ctrl_c() => { handle.disconnect(); rx.recv().await }
-            Some(line) = stdin.recv() => {
-                if awaiting_answer {
-                    awaiting_answer = false;
-                    handle.confirm_pairing(line == "y");
-                }
+            Some(line) = stdin.recv(), if awaiting_answer => {
+                awaiting_answer = false;
+                handle.confirm_pairing(line == "y");
                 continue;
             }
         };
