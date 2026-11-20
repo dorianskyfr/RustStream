@@ -1,0 +1,13 @@
+cargo run --release -p ruststream-cli -- bench-loopback --size 1920x1080 --fps 60 --seconds 10 --encoder hardware --decoder software
+
+Loopback benchmark: 1920x1080 @ 60 fps, 20000 kbps, 10 s (synthetic frames, encoder Hardware, decoder Software)
+Encoder: Intel® Quick Sync Video H.264 Encoder MFT
+Decoder: OpenH264 (software)
+Latency (ms). Decode and capture→decoded are per frame; encode is the per-second median.
+| Stage                        |      p50 |      p95 |      p99 |      max |      n |
+|------------------------------|----------|----------|----------|----------|--------|
+| Encode (host, 1 s medians)   |    12.86 |    13.34 |    13.34 |    13.34 |     10 |
+| Decode (client)              |     9.84 |    13.11 |    15.52 |    20.50 |    564 |
+| Capture → decoded            |    23.90 |    29.33 |    32.61 |    37.36 |    564 |
+Mean decoded fps: 56.2
+Last second: 20.1 Mbit/s, dropped frames 31, lost packets 0

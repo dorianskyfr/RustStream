@@ -26,7 +26,7 @@ COMMANDS:
                                   Share this computer (pairing approved in the terminal)
     connect <ADDRESS> [--fingerprint HEX] [--seconds N]
                                   Headless client printing live statistics
-    bench-loopback [--size WxH] [--fps N] [--bitrate KBPS] [--seconds N] [--encoder auto|hardware|software]
+    bench-loopback [--size WxH] [--fps N] [--bitrate KBPS] [--seconds N] [--encoder auto|hardware|software] [--decoder auto|hardware|software]
                                   In-process host+client over 127.0.0.1 (synthetic frames)
     bench-capture [--display N] [--seconds N]
                                   Desktop capture + auto-selected encode timings
@@ -338,6 +338,7 @@ async fn connect_cmd(mut args: Args) -> Result<()> {
         &tokio::runtime::Handle::current(),
         ctx.identity.clone(),
         ClientConfig {
+            decoder_preference: client::DecoderPreference::Auto,
             address: addr,
             policy: fp.map_or(ServerPolicy::Pairing, ServerPolicy::Pinned),
             device_name: settings.device_name.clone(),
@@ -432,6 +433,12 @@ async fn bench_loopback(mut args: Args) -> Result<()> {
         "software" => host::EncoderPreference::Software,
         other => bail!("invalid --encoder {other}: expected auto, hardware or software"),
     };
+    let decoder_preference = match args.value("--decoder")?.as_deref().unwrap_or("auto") {
+        "auto" => client::DecoderPreference::Auto,
+        "hardware" => client::DecoderPreference::Hardware,
+        "software" => client::DecoderPreference::Software,
+        other => bail!("invalid --decoder {other}: expected auto, hardware or software"),
+    };
     let (w, h) = parse_size(&args.value("--size")?.unwrap_or_else(|| "1920x1080".into()))?;
     let fps: u16 = args.parsed("--fps", 60)?;
     let bitrate: u32 = args.parsed("--bitrate", 20_000)?;
@@ -482,6 +489,7 @@ async fn bench_loopback(mut args: Args) -> Result<()> {
         client_ctx.identity.clone(),
         ClientConfig {
             address: host.local_addr(),
+            decoder_preference,
             policy: ServerPolicy::Pinned(host_ctx.identity.fingerprint()),
             device_name: "bench client".into(),
             request,
@@ -498,7 +506,7 @@ async fn bench_loopback(mut args: Args) -> Result<()> {
     );
 
     println!(
-        "Loopback benchmark: {w}x{h} @ {fps} fps, {bitrate} kbps, {seconds} s (synthetic frames, encoder {encoder_preference:?})"
+        "Loopback benchmark: {w}x{h} @ {fps} fps, {bitrate} kbps, {seconds} s (synthetic frames, encoder {encoder_preference:?}, decoder {decoder_preference:?})"
     );
     let warmup = Duration::from_secs(2);
     let start = Instant::now();
@@ -523,6 +531,7 @@ async fn bench_loopback(mut args: Args) -> Result<()> {
                 }
             }
             Some(ev) = crx.recv() => match ev {
+                ClientEvent::Connected { decoder, .. } => println!("Decoder: {decoder}"),
                 ClientEvent::Stats(s) if start.elapsed() > warmup => {
                     fps_samples.push(s.fps);
                     last_client = Some(s);

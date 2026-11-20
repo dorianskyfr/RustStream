@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc as std_mpsc};
 use std::time::{Duration, Instant};
 
+pub use ruststream_codec::DecoderPreference;
+use ruststream_codec::VideoDecoder;
 use ruststream_network::NetError;
 use ruststream_network::stream::{recv_msg, send_msg};
 use ruststream_network::transport::{self, close_code};
@@ -32,6 +34,8 @@ use crate::{CoreError, Result, unix_micros};
 
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
+    /// Local decoder policy; does not change the stream's network protocol.
+    pub decoder_preference: DecoderPreference,
     pub address: SocketAddr,
     pub policy: ServerPolicy,
     pub device_name: String,
@@ -44,6 +48,8 @@ pub enum ClientEvent {
     /// First connection: show this code; it must match the one on the host.
     PairingCode(String),
     Connected {
+        /// Actual selected backend, including MFT/GPU name for DXVA.
+        decoder: String,
         host_name: String,
         host_fingerprint: Fingerprint,
         params: SessionParams,
@@ -284,8 +290,24 @@ async fn session(
             return Err(e);
         }
     };
+    let preference = cfg.decoder_preference;
+    let decoder_result =
+        tokio::task::spawn_blocking(move || ruststream_codec::create_decoder(preference))
+            .await
+            .map_err(|e| CoreError::Other(e.to_string()))
+            .and_then(|r| r.map_err(CoreError::from));
+    let video_decoder = match decoder_result {
+        Ok(decoder) => decoder,
+        Err(error) => {
+            reader.abort();
+            conn.close(close_code::NORMAL.into(), b"decoder unavailable");
+            return Err(error);
+        }
+    };
+    let decoder_name = video_decoder.name().into_owned();
     let newly_paired = code_shown;
     let _ = events.send(ClientEvent::Connected {
+        decoder: decoder_name,
         host_name,
         host_fingerprint: host_fp,
         params,
@@ -329,7 +351,7 @@ async fn session(
         let failed = decode_failed.clone();
         std::thread::Builder::new()
             .name("rs-client-decode".into())
-            .spawn(move || decoder_loop(dec_rx, on_frame, stats, failed))?
+            .spawn(move || decoder_loop(video_decoder, dec_rx, on_frame, stats, failed))?
     };
 
     let mut reasm = Reassembler::new(4);
@@ -463,19 +485,13 @@ async fn session(
 }
 
 fn decoder_loop(
+    mut decoder: Box<dyn VideoDecoder>,
     rx: std_mpsc::Receiver<EncodedFrame>,
     mut on_frame: FrameCallback,
     stats: Arc<Mutex<StatsState>>,
     failed: Arc<AtomicBool>,
 ) {
-    let mut decoder = match ruststream_codec::create_decoder() {
-        Ok(d) => d,
-        Err(e) => {
-            tracing::error!(error = %e, "cannot create decoder");
-            return;
-        }
-    };
-    tracing::info!(decoder = decoder.name(), "decoder ready");
+    tracing::info!(decoder = %decoder.name(), "decoder ready");
     let mut rgba = Vec::new();
     while let Ok(f) = rx.recv() {
         let t0 = Instant::now();

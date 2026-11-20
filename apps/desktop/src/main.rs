@@ -117,6 +117,7 @@ struct App {
     pairing: Option<PairingRequest>,
     host_peer: Option<String>,
     host_encoder: String,
+    client_decoder: String,
     discovered: HashMap<Fingerprint, (DiscoveredHost, Instant)>,
     discovery_stop: CancelFlag,
     client: Option<ClientSession>,
@@ -267,7 +268,7 @@ fn error_text(reason: &str) -> String {
     }
 }
 
-fn session_stat_lines(st: &SessionStats) -> Vec<StatLine> {
+fn session_stat_lines(st: &SessionStats, decoder: &str) -> Vec<StatLine> {
     let ms = |us: u64| us as f64 / 1000.0;
     vec![
         StatLine {
@@ -304,7 +305,7 @@ fn session_stat_lines(st: &SessionStats) -> Vec<StatLine> {
         },
         StatLine {
             label: s("Décodeur"),
-            value: s("OpenH264 (logiciel)"),
+            value: s(decoder),
         },
     ]
 }
@@ -704,6 +705,7 @@ impl App {
             }
         };
         let cfg = ClientConfig {
+            decoder_preference: client::DecoderPreference::Auto,
             address: addr,
             policy: c
                 .target
@@ -768,7 +770,9 @@ impl App {
                 params,
                 displays,
                 newly_paired,
+                decoder,
             } => {
+                self.client_decoder = decoder;
                 self.clear_link();
                 let Some(c) = self.client.as_mut() else {
                     return;
@@ -837,7 +841,8 @@ impl App {
                 self.ui.set_stream_height(p.height as i32);
             }
             ClientEvent::Stats(st) => {
-                self.ui.set_stats(model(session_stat_lines(&st)));
+                self.ui
+                    .set_stats(model(session_stat_lines(&st, &self.client_decoder)));
                 self.push_link(st.bitrate_mbps, st.rtt_ms);
             }
             ClientEvent::Disconnected {
@@ -1240,7 +1245,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(not(windows))]
     let gpus: Vec<SharedString> = Vec::new();
     ui.set_gpus(model(gpus));
-    ui.set_encoder_text(s("Encodage H.264 matériel via Media Foundation si disponible (Quick Sync, NVIDIA ou AMD), avec repli logiciel OpenH264. Le décodeur utilise OpenH264."));
+    ui.set_encoder_text(s("Encodage et décodage H.264 matériels via Media Foundation si disponibles, avec repli logiciel OpenH264. Les statistiques affichent les codecs sélectionnés."));
 
     // LAN discovery listener.
     let discovery_stop = CancelFlag::new();
@@ -1271,6 +1276,7 @@ fn main() -> anyhow::Result<()> {
             pairing: None,
             host_peer: None,
             host_encoder: String::new(),
+            client_decoder: String::new(),
             discovered: HashMap::new(),
             discovery_stop,
             client: None,

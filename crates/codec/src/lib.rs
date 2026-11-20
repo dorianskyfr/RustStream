@@ -6,16 +6,21 @@
 //! |---|---|---|---|
 //! | OpenH264 | H.264 | **software fallback** | implemented |
 //! | Media Foundation (Quick Sync / NVIDIA / AMD MFT) | H.264 | hardware | Windows, CPU BGRA → NV12 |
+//! | Media Foundation decoder (D3D11/DXVA) | H.264 | hardware | Windows, NV12 GPU readback → RGBA |
 //!
 //! The software path is explicitly identified as such everywhere it is shown
 //! (`EncoderInfo::hardware == false`).
 
 #[cfg(windows)]
 mod mf_backend;
+#[cfg(windows)]
+mod mf_decoder;
 mod openh264_backend;
 
 #[cfg(windows)]
 pub use mf_backend::MfEncoder;
+#[cfg(windows)]
+pub use mf_decoder::MfDecoder;
 pub use openh264_backend::{OpenH264Decoder, OpenH264Encoder};
 
 /// Description of the selected encoder, including its runtime MFT name.
@@ -44,6 +49,15 @@ pub struct EncoderSettings {
 /// Backend selection. Hardware never silently falls back to software.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum EncoderPreference {
+    #[default]
+    Auto,
+    Hardware,
+    Software,
+}
+
+/// Decoder selection. Hardware requires a verified DXVA path and immediate output.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum DecoderPreference {
     #[default]
     Auto,
     Hardware,
@@ -86,7 +100,7 @@ pub trait VideoEncoder: Send {
 
 /// Decodes a compressed bitstream into RGBA8 pixels.
 pub trait VideoDecoder: Send {
-    fn name(&self) -> &'static str;
+    fn name(&self) -> std::borrow::Cow<'static, str>;
 
     /// Decodes one access unit. On success with a picture, `out` holds
     /// `width * height * 4` RGBA bytes and the dimensions are returned.
@@ -111,7 +125,20 @@ pub fn create_encoder(settings: EncoderSettings) -> Result<Box<dyn VideoEncoder>
     Ok(Box::new(OpenH264Encoder::new(settings)?))
 }
 
-/// Creates the best available decoder for H.264.
-pub fn create_decoder() -> Result<Box<dyn VideoDecoder>, CodecError> {
+/// Tries a probed D3D11/DXVA decoder first, logging Auto fallback reasons.
+pub fn create_decoder(preference: DecoderPreference) -> Result<Box<dyn VideoDecoder>, CodecError> {
+    if preference != DecoderPreference::Software {
+        #[cfg(windows)]
+        let hardware = MfDecoder::new();
+        #[cfg(not(windows))]
+        let hardware: Result<OpenH264Decoder, CodecError> = Err(CodecError::Backend(
+            "Media Foundation hardware decoding requires Windows".into(),
+        ));
+        match hardware {
+            Ok(decoder) => return Ok(Box::new(decoder)),
+            Err(error) if preference == DecoderPreference::Hardware => return Err(error),
+            Err(error) => tracing::warn!(%error, "hardware decoder unavailable; using OpenH264"),
+        }
+    }
     Ok(Box::new(OpenH264Decoder::new()?))
 }

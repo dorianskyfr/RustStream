@@ -4,7 +4,7 @@ Dernière mise à jour : 2026-11-20. Ce fichier permet de reprendre le développ
 
 ## État actuel
 
-Phases 0 et 1 terminées ; phase 2 fonctionnelle de bout en bout **en boucle locale**. Encodeur H.264 matériel Media Foundation ajouté et aller-retour validé sur Intel Iris Xe ; repli OpenH264 disponible. Pas encore testé entre deux PC physiques.
+Phases 0 et 1 terminées ; phase 2 fonctionnelle de bout en bout **en boucle locale**. Encodeur et décodeur H.264 matériels Media Foundation validés sur Intel Iris Xe ; repli OpenH264 disponible pour les deux. Pas encore testé entre deux PC physiques.
 
 ## Décisions structurantes
 
@@ -16,7 +16,7 @@ Phases 0 et 1 terminées ; phase 2 fonctionnelle de bout en bout **en boucle loc
 | Appairage | Code SAS à 6 chiffres issu d'un échange engagement/révélation, confirmé sur les deux appareils ; un client qui ne connaît pas l'hôte impose toujours l'appairage | SECURITY.md |
 | Protocole | Version 2 (ALPN `ruststream/2`) : incompatible avec la v1 depuis l'appairage par engagement | crates/protocol |
 | Capture | DXGI Desktop Duplication (copie GPU→CPU ; entrée CPU BGRA pour les deux encodeurs) | ARCHITECTURE.md |
-| Codec | H.264 matériel via Media Foundation, Constrained Baseline ; OpenH264 en repli journalisé ; choix Auto/Hardware/Software | crates/codec, docs/LICENSES.md (brevets) |
+| Codec | Encodage H.264 Constrained Baseline et décodage D3D11/DXVA via Media Foundation ; OpenH264 en repli journalisé ; choix Auto/Hardware/Software indépendants | crates/codec, docs/LICENSES.md (brevets) |
 | Licence | MIT OR Apache-2.0 | LICENSE-* |
 
 ## Terminé et testé
@@ -28,6 +28,7 @@ Phases 0 et 1 terminées ; phase 2 fonctionnelle de bout en bout **en boucle loc
 - Capture DXGI réelle (vérifiée sur Intel Iris Xe, 1920×1080 à 60 Hz, conscience DPI par écran).
 - Encodage/décodage H.264 OpenH264 (aller-retour testé : erreur moyenne bornée, image clé forcée, changement de taille).
 - Encodeur matériel asynchrone Media Foundation : MTA privé, BGRA→NV12 CPU avec tampon réutilisé, CBR, basse latence, sortie Annex-B avec SPS/PPS. Test réellement exécuté sur « Intel® Quick Sync Video H.264 Encoder MFT » : 16 images décodées par OpenH264, erreur moyenne rouge < 12, IDR forcées décodables isolément et passage 320×180→640×360. NVIDIA/AMD non testés.
+- Décodeur « Microsoft H264 Video Decoder MFT (D3D11/DXVA; Intel(R) Iris(R) Xe Graphics) » : device matériel et textures NV12 liées au décodeur vérifiés, MTA privé, copie GPU→CPU et conversion BT.601 limitée vers RGBA avec tampons réutilisés (SSE2 exact sur x64, chemin scalaire pour les fins de ligne/autres architectures). Test matériel réellement exécuté : sortie dans le même appel pour chaque AU valide, erreur moyenne < 12 sur chaque canal RGB, 320×180→640×360, reprise sur IDR après P perdue ou corrompue. Le client affiche le nom réel et `bench-loopback` accepte `--decoder auto|hardware|software`.
 - Entrées : injection `SendInput` avec relâchement garanti, hook clavier client, projection multi-écrans (tests unitaires).
 - Moteur de session : tests d'intégration en boucle locale avec QUIC/TLS/H.264 réels : appairage, reconnexion épinglée, révocation, refus, imposteur, appairage désactivé, une seule session à la fois, confirmation locale obligatoire du code.
 - CLI : `info`, `host`, `connect`, `trusted`, `bench-loopback`, `bench-capture`.
@@ -40,7 +41,7 @@ Phases 0 et 1 terminées ; phase 2 fonctionnelle de bout en bout **en boucle loc
 ## Restant (par phase)
 
 - **Phase 2** : essai réel entre deux PC Windows ; incrustation du curseur distant ; mise à l'échelle de la résolution ; **écrans pivotés (portrait)** : la rotation DXGI n'est pas encore appliquée (image de travers), à corriger et valider sur un écran pivoté (relevé par la revue Codex).
-- **Phase 3** : validation des MFT NVIDIA/AMD, entrée GPU sans copie CPU et décodage matériel, audio WASAPI + Opus, manettes, souris relative et verrouillage du curseur, débit adaptatif, mesure du temps d'affichage.
+- **Phase 3** : validation des MFT NVIDIA/AMD, entrée et rendu GPU sans copie CPU, audio WASAPI + Opus, manettes, souris relative et verrouillage du curseur, débit adaptatif, mesure du temps d'affichage.
 - **Phase 4** : audit des pilotes USB (usbipd-win, usbip-win2), redirection USB encapsulée dans QUIC.
 - **Phase 5** : traversée NAT, relais auto-hébergeable, reconnexion automatique.
 - **Phases 6-7** : profilage, rendu par texture GPU partagée, installateur, mises à jour, audit de sécurité.
@@ -68,7 +69,14 @@ target/release/ruststream-cli.exe bench-capture --seconds 5
 
 ## Derniers résultats de tests
 
-2026-11-20, Windows x64, Rust 1.100.0 :
+2026-11-20 — ajout du décodeur MF, Windows x64, Rust 1.100.0, bac à sable Codex :
+- `cargo fmt --all -- --check` : OK ; `cargo clippy --workspace --all-targets` : 0 avertissement Clippy.
+- Codec : **8 tests réussis**, dont le véritable décodeur D3D11/DXVA Intel (non sauté), les changements de taille, la reprise après perte/corruption et la comparaison SSE2/scalaire octet par octet avec padding/crop/fins de ligne.
+- `cargo test --workspace` (session utilisateur normale) : **61 tests, 61 réussis**, dont `dpapi_roundtrip` (il n'échoue que dans le bac à sable de Codex).
+- Décodage 1080p, deux tours indépendants : DXVA 7,4-7,6 ms p50 contre 10,0-10,1 ms pour OpenH264, et environ 18 % de temps processeur en moins (voir BENCHMARKS.md).
+- Deux paires de mesures release 1080p, 60 i/s demandées, 10 s, encodeur matériel fixe : décodage matériel p50/p95 **7,00 / 7,61 ms** puis **6,68 / 8,04 ms** ; OpenH264 **6,12 / 7,45 ms** puis **9,84 / 13,11 ms**. Deuxième paire : capture→décodé **20,76 / 23,16 ms** et **59,8 i/s** en matériel, **23,90 / 29,33 ms** et **56,2 i/s** en logiciel. Les cadences et images abandonnées varient entre paires ; pas de gain systématique ni de 60 i/s garanties. Les quatre sorties sont conservées dans [BENCHMARKS.md](BENCHMARKS.md).
+
+2026-11-20 — état avant l'ajout du décodeur MF (session utilisateur normale) :
 - `cargo fmt --all -- --check` : OK.
 - `cargo clippy --workspace --all-targets` : 0 avertissement Clippy.
 - Codec : **6 tests réussis**, dont le véritable aller-retour matériel Intel (non sauté), IDR forcées et redimensionnement.

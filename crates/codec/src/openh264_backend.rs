@@ -145,8 +145,8 @@ impl OpenH264Decoder {
 }
 
 impl VideoDecoder for OpenH264Decoder {
-    fn name(&self) -> &'static str {
-        "OpenH264 (software)"
+    fn name(&self) -> std::borrow::Cow<'static, str> {
+        "OpenH264 (software)".into()
     }
 
     fn decode(&mut self, data: &[u8], out: &mut Vec<u8>) -> Result<Option<(u32, u32)>, CodecError> {

@@ -217,9 +217,9 @@ fn bgra_to_nv12(src: &[u8], w: usize, h: usize, dst: &mut [u8]) {
     }
 }
 
-struct Runtime;
+pub(super) struct Runtime;
 impl Runtime {
-    fn new() -> Result<Self, CodecError> {
+    pub(super) fn new() -> Result<Self, CodecError> {
         // SAFETY: called only on the new private worker; balanced on this thread.
         unsafe {
             CoInitializeEx(None, COINIT_MULTITHREADED)
@@ -244,9 +244,9 @@ impl Drop for Runtime {
 }
 
 #[implement(IMFAsyncCallback)]
-struct EventCallback {
-    generator: IMFMediaEventGenerator,
-    sender: Sender<Result<u32, String>>,
+pub(super) struct EventCallback {
+    pub(super) generator: IMFMediaEventGenerator,
+    pub(super) sender: Sender<Result<u32, String>>,
 }
 impl IMFAsyncCallback_Impl for EventCallback_Impl {
     fn GetParameters(&self, _: *mut u32, _: *mut u32) -> windows::core::Result<()> {
@@ -273,7 +273,7 @@ impl IMFAsyncCallback_Impl for EventCallback_Impl {
 }
 
 // ShutdownObject must run even when type negotiation fails halfway through.
-struct Activation(IMFActivate);
+pub(super) struct Activation(pub(super) IMFActivate);
 impl Drop for Activation {
     fn drop(&mut self) {
         // SAFETY: owned activation, called on its MTA before MFShutdown.
@@ -711,13 +711,13 @@ fn media_type(s: EncoderSettings, subtype: GUID) -> Result<IMFMediaType, CodecEr
     }
 }
 
-struct BufferLock<'a> {
+pub(super) struct BufferLock<'a> {
     buffer: &'a IMFMediaBuffer,
     ptr: *mut u8,
     capacity: usize,
 }
 impl<'a> BufferLock<'a> {
-    fn new(buffer: &'a IMFMediaBuffer) -> Result<Self, CodecError> {
+    pub(super) fn new(buffer: &'a IMFMediaBuffer) -> Result<Self, CodecError> {
         let mut ptr = std::ptr::null_mut();
         let mut capacity = 0;
         // SAFETY: out parameters live through Lock; Drop unlocks the buffer.
@@ -732,7 +732,7 @@ impl<'a> BufferLock<'a> {
             capacity: capacity as usize,
         })
     }
-    fn bytes_mut(&mut self, len: usize) -> &mut [u8] {
+    pub(super) fn bytes_mut(&mut self, len: usize) -> &mut [u8] {
         assert!(len <= self.capacity);
         if len == 0 {
             return &mut [];
@@ -814,7 +814,7 @@ fn sequence_header(
     Ok(())
 }
 
-fn nals(data: &[u8]) -> impl Iterator<Item = &[u8]> {
+pub(super) fn nals(data: &[u8]) -> impl Iterator<Item = &[u8]> {
     fn start(data: &[u8], from: usize) -> Option<(usize, usize)> {
         (from..data.len().saturating_sub(2)).find_map(|i| {
             if data[i..].starts_with(&[0, 0, 0, 1]) {

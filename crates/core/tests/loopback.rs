@@ -58,6 +58,7 @@ fn start_client(ctx: &AppContext, addr: SocketAddr, policy: ServerPolicy) -> Tes
     let last_size = Arc::new(Mutex::new((0, 0)));
     let (f, s) = (frames.clone(), last_size.clone());
     let cfg = ClientConfig {
+        decoder_preference: client::DecoderPreference::Software,
         address: addr,
         policy,
         device_name: "Test client".into(),
