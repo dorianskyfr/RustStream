@@ -72,7 +72,7 @@ target/release/ruststream-cli.exe bench-capture --seconds 5
 2026-11-20 — ajout du décodeur MF, Windows x64, Rust 1.100.0, bac à sable Codex :
 - `cargo fmt --all -- --check` : OK ; `cargo clippy --workspace --all-targets` : 0 avertissement Clippy.
 - Codec : **8 tests réussis**, dont le véritable décodeur D3D11/DXVA Intel (non sauté), les changements de taille, la reprise après perte/corruption et la comparaison SSE2/scalaire octet par octet avec padding/crop/fins de ligne.
-- `cargo test --workspace` (session utilisateur normale) : **61 tests, 61 réussis**, dont `dpapi_roundtrip` (il n'échoue que dans le bac à sable de Codex).
+- `cargo test --workspace` (session utilisateur normale) : **67 tests, 67 réussis** après fusion avec la correction de rotation (61 sur la branche du décodeur), dont `dpapi_roundtrip` (il n'échoue que dans le bac à sable de Codex).
 - Décodage 1080p, deux tours indépendants : DXVA 7,4-7,6 ms p50 contre 10,0-10,1 ms pour OpenH264, et environ 18 % de temps processeur en moins (voir BENCHMARKS.md).
 - Deux paires de mesures release 1080p, 60 i/s demandées, 10 s, encodeur matériel fixe : décodage matériel p50/p95 **7,00 / 7,61 ms** puis **6,68 / 8,04 ms** ; OpenH264 **6,12 / 7,45 ms** puis **9,84 / 13,11 ms**. Deuxième paire : capture→décodé **20,76 / 23,16 ms** et **59,8 i/s** en matériel, **23,90 / 29,33 ms** et **56,2 i/s** en logiciel. Les cadences et images abandonnées varient entre paires ; pas de gain systématique ni de 60 i/s garanties. Les quatre sorties sont conservées dans [BENCHMARKS.md](BENCHMARKS.md).
 
