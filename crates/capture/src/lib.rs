@@ -15,8 +15,11 @@ use std::time::{Duration, Instant};
 #[cfg(windows)]
 pub mod dxgi;
 mod pattern;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod rotate;
 
 pub use pattern::TestPattern;
+pub use rotate::Rotation;
 
 /// One captured frame. `data` is BGRA8, `width * 4` bytes per row, and both
 /// dimensions are even (odd desktop sizes are cropped by one pixel because

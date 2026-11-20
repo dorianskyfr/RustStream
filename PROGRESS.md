@@ -39,7 +39,7 @@ Phases 0 et 1 terminées ; phase 2 fonctionnelle de bout en bout **en boucle loc
 
 ## Restant (par phase)
 
-- **Phase 2** : essai réel entre deux PC Windows ; incrustation du curseur distant ; mise à l'échelle de la résolution ; **écrans pivotés (portrait)** : la rotation DXGI n'est pas encore appliquée (image de travers), à corriger et valider sur un écran pivoté (relevé par la revue Codex).
+- **Phase 2** : essai réel entre deux PC Windows ; incrustation du curseur distant ; mise à l'échelle de la résolution ; **écrans pivotés (portrait)** : la rotation DXGI est désormais appliquée à la copie (`crates/capture/src/rotate.rs`, tests unitaires des 4 orientations), mais **pas encore validée sur un vrai écran pivoté**.
 - **Phase 3** : validation des MFT NVIDIA/AMD, entrée GPU sans copie CPU et décodage matériel, audio WASAPI + Opus, manettes, souris relative et verrouillage du curseur, débit adaptatif, mesure du temps d'affichage.
 - **Phase 4** : audit des pilotes USB (usbipd-win, usbip-win2), redirection USB encapsulée dans QUIC.
 - **Phase 5** : traversée NAT, relais auto-hébergeable, reconnexion automatique.
