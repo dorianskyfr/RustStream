@@ -17,16 +17,30 @@ use windows::Win32::Graphics::Direct3D11::{
     D3D11_MAPPED_SUBRESOURCE, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING,
     D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
 };
-use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC};
+use windows::Win32::Graphics::Dxgi::Common::{
+    DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_MODE_ROTATION, DXGI_MODE_ROTATION_ROTATE90,
+    DXGI_MODE_ROTATION_ROTATE180, DXGI_MODE_ROTATION_ROTATE270, DXGI_SAMPLE_DESC,
+};
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory1, DXGI_ERROR_ACCESS_LOST, DXGI_ERROR_NOT_FOUND, DXGI_ERROR_WAIT_TIMEOUT,
-    DXGI_OUTDUPL_FRAME_INFO, IDXGIAdapter1, IDXGIFactory1, IDXGIOutput1, IDXGIOutputDuplication,
-    IDXGIResource,
+    DXGI_OUTDUPL_DESC, DXGI_OUTDUPL_FRAME_INFO, IDXGIAdapter1, IDXGIFactory1, IDXGIOutput1,
+    IDXGIOutputDuplication, IDXGIResource,
 };
 use windows::Win32::Graphics::Gdi::{DEVMODEW, ENUM_CURRENT_SETTINGS, EnumDisplaySettingsW};
 use windows::core::{Interface, PCWSTR};
 
+use crate::rotate::{Rotation, copy_oriented};
 use crate::{CaptureError, DisplayDesc, Frame, FrameSource, even};
+
+fn rotation_of(r: DXGI_MODE_ROTATION) -> Rotation {
+    match r {
+        DXGI_MODE_ROTATION_ROTATE90 => Rotation::Rotate90,
+        DXGI_MODE_ROTATION_ROTATE180 => Rotation::Rotate180,
+        DXGI_MODE_ROTATION_ROTATE270 => Rotation::Rotate270,
+        // UNSPECIFIED / IDENTITY
+        _ => Rotation::Identity,
+    }
+}
 
 fn sys(e: windows::core::Error) -> CaptureError {
     CaptureError::System(e.message())
@@ -131,6 +145,9 @@ pub struct DxgiCapture {
     duplication: Option<IDXGIOutputDuplication>,
     output: IDXGIOutput1,
     staging: Option<(ID3D11Texture2D, u32, u32)>,
+    /// Orientation of the duplicated surface, refreshed on every
+    /// `DuplicateOutput` (a rotation change invalidates the duplication).
+    rotation: Rotation,
     width: u32,
     height: u32,
     buf: Vec<u8>,
@@ -188,6 +205,7 @@ impl DxgiCapture {
             duplication: None,
             output: o.output,
             staging: None,
+            rotation: Rotation::Identity,
             buf: Vec::new(),
             last_at: None,
         };
@@ -204,6 +222,13 @@ impl DxgiCapture {
             tracing::warn!(error = %e, "DuplicateOutput failed");
             CaptureError::AccessLost
         })?;
+        // SAFETY: valid duplication interface.
+        let desc: DXGI_OUTDUPL_DESC = unsafe { dup.GetDesc() };
+        let rotation = rotation_of(desc.Rotation);
+        if rotation != self.rotation {
+            tracing::info!(?rotation, "display orientation");
+            self.rotation = rotation;
+        }
         self.duplication = Some(dup);
         Ok(())
     }
@@ -257,9 +282,7 @@ impl DxgiCapture {
         // SAFETY: both textures belong to `self.device`, same size and format.
         unsafe { self.context.CopyResource(&staging, &tex) };
 
-        let (w, h) = (even(desc.Width), even(desc.Height));
-        let row = w as usize * 4;
-        self.buf.resize(row * h as usize, 0);
+        let row = desc.Width as usize * 4;
         let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
         // SAFETY: staging texture has CPU read access; paired with Unmap below.
         unsafe {
@@ -274,13 +297,19 @@ impl DxgiCapture {
             return Err(CaptureError::System("invalid mapped texture".into()));
         }
         // SAFETY: the mapping is valid for `RowPitch * Height` bytes until
-        // Unmap; we read `h <= Height` rows of `row <= RowPitch` bytes.
+        // Unmap; `copy_oriented` reads within `Width * 4 <= RowPitch` bytes of
+        // each of the `Height` rows.
         let src = unsafe {
             std::slice::from_raw_parts(mapped.pData as *const u8, pitch * desc.Height as usize)
         };
-        for (dst, src_row) in self.buf.chunks_exact_mut(row).zip(src.chunks(pitch)) {
-            dst.copy_from_slice(&src_row[..row]);
-        }
+        let (w, h) = copy_oriented(
+            src,
+            pitch,
+            desc.Width,
+            desc.Height,
+            self.rotation,
+            &mut self.buf,
+        );
         // SAFETY: paired with the successful Map above; `src` is not used after.
         unsafe { self.context.Unmap(&staging, 0) };
         self.width = w;
