@@ -5,19 +5,23 @@
 //! | Backend | Codec | Kind | Status |
 //! |---|---|---|---|
 //! | OpenH264 | H.264 | **software fallback** | implemented |
-//! | NVENC / AMF / Quick Sync | H.264/HEVC/AV1 | hardware | not implemented yet |
+//! | Media Foundation (Quick Sync / NVIDIA / AMD MFT) | H.264 | hardware | Windows, CPU BGRA → NV12 |
 //!
 //! The software path is explicitly identified as such everywhere it is shown
 //! (`EncoderInfo::hardware == false`).
 
+#[cfg(windows)]
+mod mf_backend;
 mod openh264_backend;
 
+#[cfg(windows)]
+pub use mf_backend::MfEncoder;
 pub use openh264_backend::{OpenH264Decoder, OpenH264Encoder};
 
-/// Static description of an encoder backend.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Description of the selected encoder, including its runtime MFT name.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncoderInfo {
-    pub name: &'static str,
+    pub name: std::borrow::Cow<'static, str>,
     pub codec: Codec,
     pub hardware: bool,
 }
@@ -34,6 +38,16 @@ pub struct EncoderSettings {
     pub height: u32,
     pub fps: u32,
     pub bitrate_kbps: u32,
+    pub preference: EncoderPreference,
+}
+
+/// Backend selection. Hardware never silently falls back to software.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum EncoderPreference {
+    #[default]
+    Auto,
+    Hardware,
+    Software,
 }
 
 /// Result of encoding one frame.
@@ -79,9 +93,21 @@ pub trait VideoDecoder: Send {
     fn decode(&mut self, data: &[u8], out: &mut Vec<u8>) -> Result<Option<(u32, u32)>, CodecError>;
 }
 
-/// Creates the best available encoder. Today this is always the software
-/// OpenH264 backend.
+/// Tries hardware first in Auto mode, logging the reason for software fallback.
 pub fn create_encoder(settings: EncoderSettings) -> Result<Box<dyn VideoEncoder>, CodecError> {
+    if settings.preference != EncoderPreference::Software {
+        #[cfg(windows)]
+        let hardware = MfEncoder::new(settings);
+        #[cfg(not(windows))]
+        let hardware: Result<OpenH264Encoder, CodecError> = Err(CodecError::Backend(
+            "Media Foundation hardware encoding requires Windows".into(),
+        ));
+        match hardware {
+            Ok(encoder) => return Ok(Box::new(encoder)),
+            Err(error) if settings.preference == EncoderPreference::Hardware => return Err(error),
+            Err(error) => tracing::warn!(%error, "hardware encoder unavailable; using OpenH264"),
+        }
+    }
     Ok(Box::new(OpenH264Encoder::new(settings)?))
 }
 

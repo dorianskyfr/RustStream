@@ -26,10 +26,10 @@ COMMANDS:
                                   Share this computer (pairing approved in the terminal)
     connect <ADDRESS> [--fingerprint HEX] [--seconds N]
                                   Headless client printing live statistics
-    bench-loopback [--size WxH] [--fps N] [--bitrate KBPS] [--seconds N]
+    bench-loopback [--size WxH] [--fps N] [--bitrate KBPS] [--seconds N] [--encoder auto|hardware|software]
                                   In-process host+client over 127.0.0.1 (synthetic frames)
     bench-capture [--display N] [--seconds N]
-                                  Desktop capture + software encode timings
+                                  Desktop capture + auto-selected encode timings
     trusted [--revoke HEX]        List (or revoke) devices allowed to connect
 
 Logs: set RUST_LOG=debug for details.
@@ -158,7 +158,9 @@ fn info(args: Args) -> Result<()> {
         }
         Err(e) => println!("GPUs: unavailable ({e})"),
     }
-    println!("Video encoder: OpenH264 (software fallback; hardware encoders not implemented yet)");
+    println!(
+        "Video encoder: Media Foundation hardware H.264 when available; OpenH264 software fallback"
+    );
     Ok(())
 }
 
@@ -238,6 +240,7 @@ async fn host_cmd(mut args: Args) -> Result<()> {
     let ctx = load_context()?;
     let (tx, mut rx) = mpsc::unbounded_channel();
     let cfg = HostConfig {
+        encoder_preference: host::EncoderPreference::Auto,
         device_name: ruststream_core::default_device_name(),
         bind: SocketAddr::from(([0, 0, 0, 0], port)),
         allow_pairing: !no_pairing,
@@ -423,6 +426,12 @@ fn print_summary(name: &str, s: &Summary) {
 }
 
 async fn bench_loopback(mut args: Args) -> Result<()> {
+    let encoder_preference = match args.value("--encoder")?.as_deref().unwrap_or("auto") {
+        "auto" => host::EncoderPreference::Auto,
+        "hardware" => host::EncoderPreference::Hardware,
+        "software" => host::EncoderPreference::Software,
+        other => bail!("invalid --encoder {other}: expected auto, hardware or software"),
+    };
     let (w, h) = parse_size(&args.value("--size")?.unwrap_or_else(|| "1920x1080".into()))?;
     let fps: u16 = args.parsed("--fps", 60)?;
     let bitrate: u32 = args.parsed("--bitrate", 20_000)?;
@@ -442,6 +451,7 @@ async fn bench_loopback(mut args: Args) -> Result<()> {
     let host = host::start(
         &host_ctx,
         HostConfig {
+            encoder_preference,
             device_name: "bench host".into(),
             bind: SocketAddr::from(([127, 0, 0, 1], 0)),
             allow_pairing: false,
@@ -488,7 +498,7 @@ async fn bench_loopback(mut args: Args) -> Result<()> {
     );
 
     println!(
-        "Loopback benchmark: {w}x{h} @ {fps} fps, {bitrate} kbps, {seconds} s (synthetic frames, software H.264)"
+        "Loopback benchmark: {w}x{h} @ {fps} fps, {bitrate} kbps, {seconds} s (synthetic frames, encoder {encoder_preference:?})"
     );
     let warmup = Duration::from_secs(2);
     let start = Instant::now();
@@ -502,11 +512,14 @@ async fn bench_loopback(mut args: Args) -> Result<()> {
         }
         tokio::select! {
             Some(ev) = hrx.recv() => {
-                if let HostEvent::Stats(s) = ev
-                    && start.elapsed() > warmup
-                {
-                    // Summaries are per-second windows: keep their medians.
-                    encode.record(s.encode_us.p50);
+                match ev {
+                    HostEvent::SessionStarted { encoder, .. } => println!("Encoder: {encoder}"),
+                    HostEvent::Warning(reason) => bail!("host: {reason}"),
+                    HostEvent::Stats(s) if start.elapsed() > warmup => {
+                        // Summaries are per-second windows: keep their medians.
+                        encode.record(s.encode_us.p50);
+                    }
+                    _ => {}
                 }
             }
             Some(ev) = crx.recv() => match ev {
@@ -566,7 +579,9 @@ fn bench_capture(mut args: Args) -> Result<()> {
         height: h,
         fps: 60,
         bitrate_kbps: 20_000,
+        preference: host::EncoderPreference::Auto,
     })?;
+    let encoder_name = encoder.info().name;
     let mut acquire = Window::new(100_000);
     let mut enc = Window::new(100_000);
     let mut bits = Vec::new();
@@ -596,7 +611,7 @@ fn bench_capture(mut args: Args) -> Result<()> {
         "|------------------------------|----------|----------|----------|----------|--------|"
     );
     print_summary("Acquire + GPU→CPU copy", &acquire.summary());
-    print_summary("Encode (OpenH264, software)", &enc.summary());
+    print_summary(&format!("Encode ({encoder_name})"), &enc.summary());
     println!("Note: acquire time includes waiting for the next desktop update (vsync).");
     Ok(())
 }

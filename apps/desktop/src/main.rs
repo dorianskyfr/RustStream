@@ -116,6 +116,7 @@ struct App {
     announce_stop: Option<CancelFlag>,
     pairing: Option<PairingRequest>,
     host_peer: Option<String>,
+    host_encoder: String,
     discovered: HashMap<Fingerprint, (DiscoveredHost, Instant)>,
     discovery_stop: CancelFlag,
     client: Option<ClientSession>,
@@ -308,7 +309,7 @@ fn session_stat_lines(st: &SessionStats) -> Vec<StatLine> {
     ]
 }
 
-fn host_stat_lines(st: &HostStats) -> Vec<StatLine> {
+fn host_stat_lines(st: &HostStats, encoder: &str) -> Vec<StatLine> {
     let ms = |us: u64| us as f64 / 1000.0;
     vec![
         StatLine {
@@ -337,7 +338,7 @@ fn host_stat_lines(st: &HostStats) -> Vec<StatLine> {
         },
         StatLine {
             label: s("Encodeur"),
-            value: s("OpenH264 (logiciel)"),
+            value: s(encoder),
         },
     ]
 }
@@ -508,6 +509,7 @@ impl App {
         self.host_starting = true;
         let ctx = self.ctx.clone();
         let cfg = HostConfig {
+            encoder_preference: host::EncoderPreference::Auto,
             device_name: self.settings.device_name.clone(),
             bind: SocketAddr::from(([0, 0, 0, 0], self.settings.host_port)),
             allow_pairing: self.settings.allow_pairing,
@@ -585,11 +587,14 @@ impl App {
                     self.ui.set_host_request_code(s(""));
                 }
             }
-            HostEvent::SessionStarted { peer_name, .. } => {
+            HostEvent::SessionStarted {
+                peer_name, encoder, ..
+            } => {
                 if self.client.as_ref().is_none_or(|c| !c.connected) {
                     self.clear_link();
                 }
                 self.host_peer = Some(peer_name);
+                self.host_encoder = encoder;
                 self.refresh_hosting();
                 self.refresh_trusted();
             }
@@ -597,7 +602,8 @@ impl App {
                 if self.client.as_ref().is_none_or(|c| !c.connected) {
                     self.ui
                         .set_stats_title(s("SESSION EN COURS (CET ORDINATEUR EST PARTAGÉ)"));
-                    self.ui.set_stats(model(host_stat_lines(&st)));
+                    self.ui
+                        .set_stats(model(host_stat_lines(&st, &self.host_encoder)));
                     self.push_link(st.bitrate_mbps, st.rtt_ms);
                 }
             }
@@ -1234,9 +1240,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(not(windows))]
     let gpus: Vec<SharedString> = Vec::new();
     ui.set_gpus(model(gpus));
-    ui.set_encoder_text(s(
-        "Encodeur vidéo actuel : OpenH264 (logiciel, H.264). Les encodeurs matériels NVENC, AMF et Quick Sync ne sont pas encore implémentés : le flux est plus lent et sollicite davantage le processeur.",
-    ));
+    ui.set_encoder_text(s("Encodage H.264 matériel via Media Foundation si disponible (Quick Sync, NVIDIA ou AMD), avec repli logiciel OpenH264. Le décodeur utilise OpenH264."));
 
     // LAN discovery listener.
     let discovery_stop = CancelFlag::new();
@@ -1266,6 +1270,7 @@ fn main() -> anyhow::Result<()> {
             announce_stop: None,
             pairing: None,
             host_peer: None,
+            host_encoder: String::new(),
             discovered: HashMap::new(),
             discovery_stop,
             client: None,

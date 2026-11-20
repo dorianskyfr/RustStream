@@ -1,0 +1,12 @@
+cargo run --release -p ruststream-cli -- bench-loopback --size 1920x1080 --fps 60 --seconds 10 --encoder software
+
+Loopback benchmark: 1920x1080 @ 60 fps, 20000 kbps, 10 s (synthetic frames, encoder Software)
+Encoder: OpenH264 (software)
+Latency (ms). Decode and capture→decoded are per frame; encode is the per-second median.
+| Stage                        |      p50 |      p95 |      p99 |      max |      n |
+|------------------------------|----------|----------|----------|----------|--------|
+| Encode (host, 1 s medians)   |   111.75 |   112.00 |   112.00 |   112.00 |     10 |
+| Decode (client)              |    12.16 |    15.20 |    19.40 |    19.40 |     86 |
+| Capture → decoded            |   124.88 |   132.08 |   143.71 |   143.71 |     86 |
+Mean decoded fps: 8.5
+Last second: 2.2 Mbit/s, dropped frames 0, lost packets 0

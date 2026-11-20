@@ -76,7 +76,7 @@ impl OpenH264Encoder {
 impl VideoEncoder for OpenH264Encoder {
     fn info(&self) -> EncoderInfo {
         EncoderInfo {
-            name: "OpenH264 (software)",
+            name: "OpenH264 (software)".into(),
             codec: Codec::H264,
             hardware: false,
         }
@@ -185,6 +185,7 @@ mod tests {
             height: h,
             fps: 60,
             bitrate_kbps: 5_000,
+            preference: crate::EncoderPreference::Software,
         }
     }
 

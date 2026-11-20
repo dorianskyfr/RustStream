@@ -30,6 +30,7 @@ async fn start_host(
 ) -> (HostHandle, mpsc::UnboundedReceiver<HostEvent>) {
     let (tx, rx) = mpsc::unbounded_channel();
     let cfg = HostConfig {
+        encoder_preference: host::EncoderPreference::Software,
         device_name: "Test host".into(),
         bind: SocketAddr::from(([127, 0, 0, 1], 0)),
         allow_pairing,

@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use ruststream_capture::{CaptureError, DisplayDesc, FrameSource, TestPattern};
+pub use ruststream_codec::EncoderPreference;
 use ruststream_codec::{EncodeOutcome, EncoderSettings, VideoEncoder};
 use ruststream_input::{InjectBackend, Injector, NullBackend};
 use ruststream_network::stream::{recv_msg, send_msg};
@@ -54,6 +55,7 @@ pub enum InputMode {
 
 #[derive(Debug, Clone)]
 pub struct HostConfig {
+    pub encoder_preference: EncoderPreference,
     pub device_name: String,
     pub bind: SocketAddr,
     pub allow_pairing: bool,
@@ -577,6 +579,7 @@ async fn run_session(
         height,
         fps: u32::from(fps),
         bitrate_kbps: params.bitrate_kbps,
+        preference: shared.cfg.encoder_preference,
     }) {
         Ok(e) => e,
         Err(e) => {
